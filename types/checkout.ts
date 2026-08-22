@@ -1,4 +1,15 @@
-export type CheckoutStatus = "draft" | "reviewing" | "pending_approval" | "approved" | "cancelled";
+export type CheckoutStatus =
+  | "draft"
+  | "reviewing"
+  | "pending_approval"
+  | "approved"
+  | "creating_order"
+  | "order_created"
+  | "payment_opened"
+  | "payment_verifying"
+  | "payment_verified"
+  | "payment_failed"
+  | "cancelled";
 
 export interface CheckoutItem {
   productId: string;
@@ -26,4 +37,9 @@ export interface CheckoutSession {
   approvedAt?: string;
   approvedAmount?: number;
   approvedAction?: "CREATE_RAZORPAY_TEST_ORDER";
+  razorpayOrderId?: string;
+  razorpayOrderAmount?: number;
+  razorpayOrderCreatedAt?: string;
+  orderCreationStatus?: "pending" | "created" | "consumed";
+  razorpayPaymentId?: string;
 }

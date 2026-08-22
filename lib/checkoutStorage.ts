@@ -15,7 +15,7 @@ export function saveCheckoutSession(session: CheckoutSession) { if (canUseStorag
 
 export function createCheckoutSession(items: CheckoutItem[]): CheckoutSession {
   const now = new Date().toISOString();
-  return { id: `checkout-${Date.now()}`, items, subtotal: items.reduce((total, item) => total + item.unitPrice * item.quantity, 0), currency: "INR", status: "reviewing", createdAt: now, updatedAt: now, activity: [{ id: `activity-${Date.now()}`, message: "Purchase intent loaded", createdAt: now }, { id: `activity-${Date.now()}-created`, message: "Checkout session created", createdAt: now }], approvalStatus: "pending" };
+  return { id: `checkout-${Date.now()}`, items, subtotal: items.reduce((total, item) => total + item.unitPrice * item.quantity, 0), currency: "INR", status: "reviewing", createdAt: now, updatedAt: now, activity: [{ id: `activity-${Date.now()}`, message: "Purchase intent loaded", createdAt: now }, { id: `activity-${Date.now()}-created`, message: "Checkout session created", createdAt: now }], approvalStatus: "pending", orderCreationStatus: "pending" };
 }
 
 export function updateCheckoutSession(session: CheckoutSession, changes: Partial<CheckoutSession>): CheckoutSession {
@@ -27,4 +27,12 @@ export function updateCheckoutSession(session: CheckoutSession, changes: Partial
 export function addCheckoutActivity(session: CheckoutSession, message: string): CheckoutSession {
   const now = new Date().toISOString();
   return updateCheckoutSession(session, { activity: [...session.activity, { id: `activity-${Date.now()}`, message, createdAt: now }] });
+}
+
+export function markOrderCreationConsumed(session: CheckoutSession): CheckoutSession {
+  return updateCheckoutSession(session, { orderCreationStatus: "consumed" });
+}
+
+export function isOrderCreationAllowed(session: CheckoutSession): boolean {
+  return session.orderCreationStatus !== "consumed";
 }
