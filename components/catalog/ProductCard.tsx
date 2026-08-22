@@ -1,9 +1,11 @@
 import type { Product } from "@/types/product";
+import type { AgentReadableProduct } from "@/types/agentCatalog";
 
 const visualSymbols: Record<string, string> = { laptop: "▣", mouse: "⌁", backpack: "▰", keyboard: "⌨", monitor: "▤" };
 
-export function ProductVisual({ product, large = false }: { product: Product; large?: boolean }) {
-  return <div className={`product-visual product-visual-${product.image} ${large ? "product-visual-large" : ""}`}><span>{visualSymbols[product.image] ?? "◇"}</span><small>{product.category}</small></div>;
+export function ProductVisual({ product, large = false }: { product: Product | AgentReadableProduct; large?: boolean }) {
+  const image = "image" in product ? product.image : product.category.toLowerCase().replace(/s$/, "");
+  return <div className={`product-visual product-visual-${image} ${large ? "product-visual-large" : ""}`}><span>{visualSymbols[image] ?? "◇"}</span><small>{product.category}</small></div>;
 }
 
 export function ProductCard({ product, onView, onEdit, onDelete }: { product: Product; onView: () => void; onEdit: () => void; onDelete: () => void }) {

@@ -1,5 +1,6 @@
-import { PlaceholderPage } from "@/components/layout/PlaceholderPage";
+import { AppShell } from "@/components/layout/AppShell";
+import { GrowthWorkspace } from "@/components/growth/GrowthWorkspace";
 
 export default function GrowthAgentPage() {
-  return <PlaceholderPage eyebrow="REVENUE INTELLIGENCE" title="AI Growth" accent="Agent" description="Analyze customer purchases and identify upsell and cross-sell opportunities to increase merchant revenue." part="Coming in Part 3" />;
+  return <AppShell><GrowthWorkspace /></AppShell>;
 }

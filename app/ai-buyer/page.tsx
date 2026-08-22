@@ -1,5 +1,6 @@
-import { PlaceholderPage } from "@/components/layout/PlaceholderPage";
+import { AppShell } from "@/components/layout/AppShell";
+import { BuyerWorkspace } from "@/components/buyer/BuyerWorkspace";
 
 export default function AiBuyerPage() {
-  return <PlaceholderPage eyebrow="AGENTIC COMMERCE" title="AI Buyer" accent="Commerce" description="Enable AI buyers to discover merchant products through structured, agent-readable commerce data." part="Coming in Part 4" />;
+  return <AppShell><BuyerWorkspace /></AppShell>;
 }
