@@ -21,6 +21,27 @@ CREATE TABLE merchants (
 );
 
 -- ============================================================
+-- TABLE: merchant_settings
+-- ============================================================
+CREATE TABLE merchant_settings (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  merchant_id      UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE UNIQUE,
+  store_description TEXT NOT NULL DEFAULT '',
+  currency         TEXT NOT NULL DEFAULT 'INR',
+  public_catalog   BOOLEAN NOT NULL DEFAULT true,
+  auto_respond     BOOLEAN NOT NULL DEFAULT true,
+  show_pricing     BOOLEAN NOT NULL DEFAULT true,
+  cross_sell       BOOLEAN NOT NULL DEFAULT true,
+  safety_checks    BOOLEAN NOT NULL DEFAULT true,
+  ai_analysis      BOOLEAN NOT NULL DEFAULT true,
+  auto_approve     BOOLEAN NOT NULL DEFAULT false,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_merchant_settings_merchant_id ON merchant_settings(merchant_id);
+
+-- ============================================================
 -- TABLE: products
 -- ============================================================
 CREATE TABLE products (

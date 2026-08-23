@@ -110,22 +110,15 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
-        <div className="agent-mini-card">
-          <div className="status-dot" />
-          <div>
-            <p className="mini-title">Merchant Agent Active</p>
-            <p className="mini-detail">Monitoring opportunities</p>
+        <Link href="/settings" className="merchant-console-footer">
+          <div className="merchant-console-avatar">MC</div>
+          <div className="merchant-console-info">
+            <span className="merchant-console-name">Merchant Console</span>
           </div>
-          <span className="mini-arrow">↗</span>
-        </div>
-        <div className="sidebar-footer">
-          <div className="avatar">MC</div>
-          <div>
-            <p className="merchant-name">Merchant Console</p>
-            <p className="merchant-email">merchant@agentcart.ai</p>
-          </div>
-          <span className="more">•••</span>
-        </div>
+          <svg className="merchant-console-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M6 4l4 4-4 4" />
+          </svg>
+        </Link>
       </div>
     </aside>
   );
