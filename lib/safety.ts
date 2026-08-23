@@ -1,7 +1,7 @@
 import type { Product } from "@/types/product";
 import type { CheckoutItem, CheckoutSession } from "@/types/checkout";
 
-export const MAX_TRANSACTION_AMOUNT = 100000;
+export const MAX_TRANSACTION_AMOUNT = 50000;
 export const MAX_QUANTITY_PER_ORDER = 5;
 
 export interface SafetyCheck {

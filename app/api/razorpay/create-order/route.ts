@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     const orderResult = await razorpay.orders.create({
       amount,
       currency: "INR",
-      receipt: `agentcart-${checkoutId}`,
+      receipt: `ag-${checkoutId.slice(0, 8)}`,
     }) as any;
 
     // 9. Update Supabase order with Razorpay order ID

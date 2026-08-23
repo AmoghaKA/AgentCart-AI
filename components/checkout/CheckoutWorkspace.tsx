@@ -195,7 +195,7 @@ function OrderSummary({
           <p className="eyebrow">ORDER REVIEW</p>
           <h2>Your order</h2>
         </div>
-        <span>
+        <span className="order-item-count">
           {session.items.length} item
           {session.items.length === 1 ? "" : "s"}
         </span>
@@ -215,56 +215,101 @@ function OrderSummary({
             stock: 0,
             available: false,
           };
+          const unitPrice = product?.price ?? item.unitPrice;
+          const lineTotal = itemTotal(item, products);
+          const inStock = (product?.stock ?? 0) > 0;
+          const lowStock = (product?.stock ?? 0) > 0 && (product?.stock ?? 0) <= 5;
           return (
-            <div className="checkout-item" key={item.productId}>
-              <ProductVisual product={visualProduct} />
-              <div className="checkout-item-name">
-                <strong>{product?.name ?? item.name}</strong>
-                <span>{money(product?.price ?? item.unitPrice)} each</span>
+            <div className="checkout-item-card" key={item.productId}>
+              <div className="item-card-visual">
+                <ProductVisual product={visualProduct} />
               </div>
-              <div className="checkout-quantity">
-                <button
-                  onClick={() =>
-                    onQuantity(item.productId, item.quantity - 1)
-                  }
-                  disabled={item.quantity <= 1}
-                >
-                  {"\u2212"}
-                </button>
-                <span>{item.quantity}</span>
-                <button
-                  onClick={() =>
-                    onQuantity(item.productId, item.quantity + 1)
-                  }
-                  disabled={
-                    item.quantity >=
-                    Math.min(MAX_QUANTITY_PER_ORDER, product?.stock ?? 0)
-                  }
-                >
-                  +
-                </button>
+              <div className="item-card-details">
+                <div className="item-card-header">
+                  <div className="item-card-title">
+                    <strong>{product?.name ?? item.name}</strong>
+                    <span className="item-category">{product?.category ?? "Catalog"}</span>
+                  </div>
+                  <button
+                    className="item-card-remove"
+                    onClick={() => onRemove(item.productId)}
+                    aria-label={`Remove ${item.name}`}
+                  >
+                    {"\u00D7"}
+                  </button>
+                </div>
+                <div className="item-card-body">
+                  <div className="item-card-pricing">
+                    <span className="item-unit-price">{money(unitPrice)} each</span>
+                    {inStock && !lowStock && (
+                      <span className="item-stock-badge in-stock">
+                        <span className="stock-dot" /> In stock
+                      </span>
+                    )}
+                    {lowStock && (
+                      <span className="item-stock-badge low-stock">
+                        <span className="stock-dot" /> {product?.stock} left
+                      </span>
+                    )}
+                    {!inStock && (
+                      <span className="item-stock-badge out-stock">
+                        <span className="stock-dot" /> Out of stock
+                      </span>
+                    )}
+                  </div>
+                  <div className="item-card-footer">
+                    <div className="item-quantity-control">
+                      <button
+                        onClick={() =>
+                          item.quantity <= 1
+                            ? onRemove(item.productId)
+                            : onQuantity(item.productId, item.quantity - 1)
+                        }
+                        aria-label="Decrease quantity"
+                      >
+                        {"\u2212"}
+                      </button>
+                      <span>{item.quantity}</span>
+                      <button
+                        onClick={() =>
+                          onQuantity(item.productId, item.quantity + 1)
+                        }
+                        disabled={
+                          item.quantity >=
+                          Math.min(MAX_QUANTITY_PER_ORDER, product?.stock ?? 0)
+                        }
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <strong className="item-line-total">
+                      {money(lineTotal)}
+                    </strong>
+                  </div>
+                </div>
               </div>
-              <strong className="checkout-line-total">
-                {money(itemTotal(item, products))}
-              </strong>
-              <button
-                className="checkout-remove"
-                onClick={() => onRemove(item.productId)}
-                aria-label={`Remove ${item.name}`}
-              >
-                {"\u00D7"}
-              </button>
             </div>
           );
         })}
       </div>
-      <div className="checkout-total">
-        <span>Subtotal</span>
-        <strong>{money(total)}</strong>
-      </div>
-      <div className="checkout-total final-total">
-        <span>Total</span>
-        <strong>{money(total)}</strong>
+      <div className="checkout-summary-footer">
+        <div className="summary-row">
+          <span>Subtotal ({session.items.length} item{session.items.length === 1 ? "" : "s"})</span>
+          <span>{money(total)}</span>
+        </div>
+        <div className="summary-row">
+          <span>Shipping</span>
+          <span className="shipping-free">Free</span>
+        </div>
+        <div className="summary-row">
+          <span>Tax (GST)</span>
+          <span>Included</span>
+        </div>
+        <div className="summary-total">
+          <span>Total</span>
+          <strong>{money(total)}</strong>
+        </div>
       </div>
     </section>
   );
@@ -703,7 +748,7 @@ export function CheckoutWorkspace() {
       paymentAttempting
     )
       return;
-    const amount =
+    const displayAmount =
       session.razorpayOrderAmount ?? session.approvedAmount ?? 0;
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
     if (!keyId) {
@@ -713,11 +758,10 @@ export function CheckoutWorkspace() {
       return;
     }
     setPaymentAttempting(true);
-    await logAuditEvent({ actor: "agent", action: "Razorpay payment opened", category: "payment", status: "success", description: `Razorpay payment interface opened for ₹${amount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount, currency: "INR", referenceId: session.razorpayOrderId });
+    await logAuditEvent({ actor: "agent", action: "Razorpay payment opened", category: "payment", status: "success", description: `Razorpay payment interface opened for ₹${displayAmount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount: displayAmount, currency: "INR", referenceId: session.razorpayOrderId });
     const options = {
       key: keyId,
       order_id: session.razorpayOrderId,
-      amount: amount * 100,
       currency: "INR",
       name: MERCHANT_NAME,
       description: "Safe AI-assisted commerce checkout",
@@ -765,6 +809,15 @@ export function CheckoutWorkspace() {
         return;
       }
       const rzp = new RazorpayCtor(options);
+      (rzp as any).on("payment.failed", async (response: { error?: { description?: string } }) => {
+        setPaymentAttempting(false);
+        if (session) {
+          const updated = await updateCheckoutSession(session, { status: "payment_failed" });
+          const withActivity = await addCheckoutActivity(updated, `Razorpay payment failed: ${response.error?.description ?? "Payment was not completed"}`);
+          setSession(withActivity);
+          await logAuditEvent({ actor: "system", action: "Payment failed", category: "payment", status: "failed", description: `Razorpay payment failed: ${response.error?.description ?? "Unknown error"} — order: ${session.razorpayOrderId ?? "N/A"}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: session.razorpayOrderId ?? undefined });
+        }
+      });
       rzp.open();
     } catch {
       setPaymentAttempting(false);
@@ -887,6 +940,12 @@ export function CheckoutWorkspace() {
             onAdd={addSuggestion}
             onDecline={declineSuggestion}
           />
+          <OrderSummary
+            session={session}
+            products={products}
+            onQuantity={changeQuantity}
+            onRemove={removeItem}
+          />
           <div className="checkout-actions-row">
             <button
               className="refresh-catalog-button"
@@ -901,12 +960,6 @@ export function CheckoutWorkspace() {
           </div>
         </div>
         <aside className="checkout-sidebar">
-          <OrderSummary
-            session={session}
-            products={products}
-            onQuantity={changeQuantity}
-            onRemove={removeItem}
-          />
           <SafetyCheck validation={validation} />
         </aside>
       </div>
