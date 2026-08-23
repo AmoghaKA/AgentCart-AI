@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { demoProducts } from "@/lib/catalogStorage";
+import { loadProducts } from "@/lib/catalogStorage";
 import { toAgentCatalog } from "@/types/agentCatalog";
 
+export const dynamic = "force-dynamic";
+
 export function GET() {
-  return NextResponse.json(toAgentCatalog(demoProducts));
+  const products = loadProducts();
+  return NextResponse.json(toAgentCatalog(products));
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { loadProducts } from "@/lib/catalogStorage";
 import { analyzeCatalog } from "@/lib/growthEngine";
+import { logAuditEvent } from "@/lib/auditLogger";
 import type { Product } from "@/types/product";
 import type { GrowthOpportunity } from "@/types/growth";
 import { OpportunityCard } from "@/components/growth/OpportunityCard";
@@ -19,7 +20,7 @@ export function GrowthWorkspace() {
   const [opportunities, setOpportunities] = useState<GrowthOpportunity[]>([]);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const runAnalysis = () => { setIsAnalyzing(true); const latestProducts = loadProducts(); setProducts(latestProducts); window.setTimeout(() => { setOpportunities(analyzeCatalog(latestProducts)); setHasAnalyzed(true); setIsAnalyzing(false); }, 320); };
+  const runAnalysis = () => { setIsAnalyzing(true); const latestProducts = loadProducts(); setProducts(latestProducts); window.setTimeout(() => { const results = analyzeCatalog(latestProducts); setOpportunities(results); setHasAnalyzed(true); setIsAnalyzing(false); logAuditEvent({ actor: "agent", action: "Growth analysis executed", category: "growth", status: results.length > 0 ? "success" : "blocked", description: `Analyzed ${latestProducts.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`, details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No complementary product relationships found", amount: results.reduce((sum, r) => sum + r.additionalRevenue, 0), currency: "INR" }); }, 320); };
   useEffect(() => { const frame = window.requestAnimationFrame(runAnalysis); return () => { window.cancelAnimationFrame(frame); }; }, []);
   const totalAdditionalRevenue = useMemo(() => opportunities.reduce((total, opportunity) => total + opportunity.additionalRevenue, 0), [opportunities]);
   const averageImpact = opportunities.length ? Math.round(totalAdditionalRevenue / opportunities.length) : 0;

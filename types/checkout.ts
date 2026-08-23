@@ -42,4 +42,9 @@ export interface CheckoutSession {
   razorpayOrderCreatedAt?: string;
   orderCreationStatus?: "pending" | "created" | "consumed";
   razorpayPaymentId?: string;
+  paymentApprovalStatus?: "pending" | "approved";
+  paymentApprovedAt?: string;
+  paymentApprovedAmount?: number;
+  paymentApprovedAction?: "OPEN_RAZORPAY_PAYMENT";
+  paymentApprovedOrderId?: string;
 }

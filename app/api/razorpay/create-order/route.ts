@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import type { NextRequest } from "next/server";
-import { MAX_TRANSACTION_AMOUNT } from "@/lib/safety";
+import {
+  MAX_TRANSACTION_AMOUNT,
+  validateAmountBoundary,
+  validateApprovalIntegrity,
+} from "@/lib/safety";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,25 +25,43 @@ function getRazorpayClient() {
 interface CreateOrderRequest {
   checkoutId: string;
   approvalAmount: number;
+  actionType?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkoutId, approvalAmount } = body as CreateOrderRequest;
+    const { checkoutId, approvalAmount, actionType } =
+      body as CreateOrderRequest;
 
     if (!checkoutId || approvalAmount == null) {
       return NextResponse.json(
-        { error: "Missing required fields: checkoutId and approvalAmount" },
+        {
+          error:
+            "Missing required fields: checkoutId and approvalAmount",
+        },
         { status: 400 }
       );
     }
 
-    // Load the checkout session from localStorage (server-side)
-    // Note: Server cannot directly read browser LocalStorage.
-    // In a real app with a database, we'd query the DB.
-    // For this demo, we accept the checkout data via the request.
-    // The client must send the relevant checkout information.
+    // Validate action type
+    if (actionType && actionType !== "CREATE_RAZORPAY_TEST_ORDER") {
+      return NextResponse.json(
+        {
+          error: `Invalid action type: ${actionType}. Only CREATE_RAZORPAY_TEST_ORDER is allowed for order creation.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate amount boundary
+    const amountValidation = validateAmountBoundary(approvalAmount);
+    if (!amountValidation.valid) {
+      return NextResponse.json(
+        { error: amountValidation.reason },
+        { status: 400 }
+      );
+    }
 
     const razorpay = getRazorpayClient();
 
@@ -47,10 +69,12 @@ export async function POST(request: NextRequest) {
     // Amount must be in the smallest currency unit (paise for INR)
     const amount = Math.round(approvalAmount * 100);
 
-    // Enforce ₹1,00,000 boundary
+    // Enforce maximum amount boundary (server-side, defense in depth)
     if (amount > MAX_TRANSACTION_AMOUNT * 100) {
       return NextResponse.json(
-        { error: `Amount exceeds maximum allowed transaction of ₹${MAX_TRANSACTION_AMOUNT}` },
+        {
+          error: `Amount exceeds maximum allowed transaction of ₹${MAX_TRANSACTION_AMOUNT.toLocaleString("en-IN")}`,
+        },
         { status: 400 }
       );
     }
@@ -81,11 +105,17 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error("Razorpay create-order error:", error);
     const err = error as Record<string, unknown>;
-    const errObj = err?.error as Record<string, unknown> | undefined;
+    const errObj = err?.error as
+      | Record<string, unknown>
+      | undefined;
 
     if (errObj) {
       return NextResponse.json(
-        { error: (errObj.description as string) || "Razorpay order creation failed" },
+        {
+          error:
+            (errObj.description as string) ||
+            "Razorpay order creation failed",
+        },
         { status: 400 }
       );
     }
@@ -93,13 +123,19 @@ export async function POST(request: NextRequest) {
     const errMsg = err?.message as string | undefined;
     if (errMsg?.includes("not configured")) {
       return NextResponse.json(
-        { error: "Razorpay is not configured. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET." },
+        {
+          error:
+            "Razorpay is not configured. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+        },
         { status: 500 }
       );
     }
 
     return NextResponse.json(
-      { error: "Failed to create Razorpay order. Please try again." },
+      {
+        error:
+          "Failed to create Razorpay order. Please try again.",
+      },
       { status: 500 }
     );
   }
