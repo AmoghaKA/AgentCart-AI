@@ -12,10 +12,19 @@ export const activity = [
   { title: "No money actions performed", detail: "The AI has only analyzed products and made recommendations.", status: "Safe", time: "24 minutes ago", icon: "✓" },
 ] as const;
 
-export const navigation = [
-  { label: "Dashboard", href: "/", icon: "grid" },
+export const merchantNavigation = [
+  { label: "Dashboard", href: "/dashboard", icon: "grid" },
   { label: "Catalog", href: "/catalog", icon: "box" },
   { label: "AI Growth Agent", href: "/growth-agent", icon: "spark" },
-  { label: "AI Buyer", href: "/ai-buyer", icon: "orbit" },
   { label: "Audit Trail", href: "/audit", icon: "activity" },
+] as const;
+
+export const buyerNavigation = [
+  { label: "AI Buyer", href: "/ai-buyer", icon: "orbit" },
+  { label: "Checkout", href: "/checkout", icon: "cart" },
+] as const;
+
+export const navigation = [
+  ...merchantNavigation,
+  ...buyerNavigation,
 ] as const;

@@ -1,133 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { GrowthOpportunity } from "@/components/dashboard/GrowthOpportunity";
-import { MetricCard } from "@/components/dashboard/MetricCard";
-import { RecentActivity } from "@/components/dashboard/RecentActivity";
-import { SafetyCard } from "@/components/dashboard/SafetyCard";
-import { metrics } from "@/lib/mockData";
-import { getAuditEvents } from "@/lib/auditLogger";
-import type { AuditEvent } from "@/types/audit";
 
-function money(value: number) {
-  return `\u20B9${value.toLocaleString("en-IN")}`;
-}
-
-function RecentAuditEvents({ events }: { events: AuditEvent[] }) {
-  if (events.length === 0) return null;
-  return (
-    <section className="activity-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">AUDIT TRAIL</p>
-          <h2>Recent Payment Events</h2>
-        </div>
-        <Link href="/audit" className="text-button">
-          View full trail <span>↗</span>
-        </Link>
-      </div>
-      <div className="activity-list">
-        {events.map((event) => (
-          <div className="activity-item" key={event.id}>
-            <div
-              className={`activity-icon ${
-                event.status === "success"
-                  ? "status-success"
-                  : event.status === "failed"
-                    ? "status-safe"
-                    : "status-ready"
-              }`}
-            >
-              {event.status === "success"
-                ? "\u2713"
-                : event.status === "failed"
-                  ? "\u2717"
-                  : "\u26A0"}
-            </div>
-            <div className="activity-copy">
-              <strong>{event.action}</strong>
-              <p>{event.description}</p>
-            </div>
-            <span
-              className={`activity-status ${
-                event.status === "success"
-                  ? "status-text-success"
-                  : event.status === "failed"
-                    ? "status-text-safe"
-                    : "status-text-ready"
-              }`}
-            >
-              {event.status === "success"
-                ? "Success"
-                : event.status === "failed"
-                  ? "Failed"
-                  : "Blocked"}
-            </span>
-            <time>
-              {new Intl.DateTimeFormat("en-IN", {
-                hour: "numeric",
-                minute: "2-digit",
-              }).format(new Date(event.timestamp))}
-            </time>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export default function Home() {
-  const [recentEvents, setRecentEvents] = useState<AuditEvent[]>([]);
-
-  useEffect(() => {
-    const events = getAuditEvents()
-      .filter((e) => e.category === "payment")
-      .slice(0, 4);
-    setRecentEvents(events);
-  }, []);
-
+export default function LandingPage() {
   return (
     <AppShell>
-      <div className="dashboard-page">
-        <header className="page-header">
-          <div>
-            <p className="eyebrow">
-              OVERVIEW <span className="eyebrow-slash">/</span> TODAY
-            </p>
-            <h1>Good morning, Merchant</h1>
-            <p className="header-subtitle">
-              Here&apos;s how your AI Growth Agent is helping identify new
-              revenue opportunities.
-            </p>
-          </div>
-          <div className="header-meta">
-            <div className="date-chip">
-              <span className="calendar-icon">□</span>
-              <span>22 Aug 2026</span>
-            </div>
-            <div className="sync-state">
-              <span className="status-dot" /> Agent is monitoring{" "}
-              <span className="sync-separator">•</span> Just now
-            </div>
-          </div>
+      <div className="landing-page">
+        <header className="landing-hero">
+          <p className="eyebrow">
+            AGENT-POWERED COMMERCE
+          </p>
+          <h1>
+            Grow revenue with <span>AI commerce</span>
+          </h1>
+          <p className="landing-subtitle">
+            AgentCart AI helps merchants increase order value with AI-powered
+            upselling, and lets AI buyers discover and purchase products
+            through a safe, transparent checkout.
+          </p>
         </header>
-        <section className="metrics-grid">
-          {metrics.map((metric, index) => (
-            <MetricCard metric={metric} index={index} key={metric.label} />
-          ))}
-        </section>
-        <GrowthOpportunity />
-        <div className="lower-grid">
-          <RecentActivity />
-          <SafetyCard />
-        </div>
-        {recentEvents.length > 0 && (
-          <div style={{ marginTop: 22 }}>
-            <RecentAuditEvents events={recentEvents} />
+
+        <section className="landing-choices">
+          <p className="eyebrow" style={{ textAlign: "center", marginBottom: 24 }}>
+            CHOOSE YOUR EXPERIENCE
+          </p>
+          <div className="landing-cards">
+            <Link href="/dashboard" className="landing-card merchant-card">
+              <div className="landing-card-icon merchant-icon">{"\u25A6"}</div>
+              <h2>Merchant Console</h2>
+              <p>
+                Grow your store&apos;s revenue with AI-powered upselling,
+                cross-selling, catalog management and commerce insights.
+              </p>
+              <div className="landing-card-features">
+                <span>{"\u2713"} Revenue Growth</span>
+                <span>{"\u2713"} Product Catalog</span>
+                <span>{"\u2713"} AI Growth Agent</span>
+                <span>{"\u2713"} Audit Trail</span>
+              </div>
+              <span className="landing-card-button merchant-button">
+                Open Merchant Console <span>{"\u2192"}</span>
+              </span>
+            </Link>
+
+            <Link href="/ai-buyer" className="landing-card buyer-card">
+              <div className="landing-card-icon buyer-icon">{"\u2726"}</div>
+              <h2>AI Buyer</h2>
+              <p>
+                Discover merchant products through an AI agent and create a
+                safe purchase intent.
+              </p>
+              <div className="landing-card-features">
+                <span>{"\u2713"} AI Product Discovery</span>
+                <span>{"\u2713"} Agent-readable Catalog</span>
+                <span>{"\u2713"} Product Recommendations</span>
+                <span>{"\u2713"} Conversational Checkout</span>
+              </div>
+              <span className="landing-card-button buyer-button">
+                Enter AI Buyer <span>{"\u2192"}</span>
+              </span>
+            </Link>
           </div>
-        )}
+        </section>
+
+        <section className="landing-flow">
+          <p className="eyebrow" style={{ textAlign: "center", marginBottom: 20 }}>
+            HOW IT WORKS
+          </p>
+          <div className="landing-flow-steps">
+            <div className="flow-step">
+              <span className="flow-step-num">1</span>
+              <strong>Merchant adds products</strong>
+              <p>Catalog managed through the Merchant Console</p>
+            </div>
+            <i />
+            <div className="flow-step">
+              <span className="flow-step-num">2</span>
+              <strong>AI Growth Agent analyzes</strong>
+              <p>Finds upsell and cross-sell opportunities</p>
+            </div>
+            <i />
+            <div className="flow-step">
+              <span className="flow-step-num">3</span>
+              <strong>AI Buyer discovers</strong>
+              <p>Buyer searches and finds matching products</p>
+            </div>
+            <i />
+            <div className="flow-step">
+              <span className="flow-step-num">4</span>
+              <strong>Safe checkout</strong>
+              <p>Explain, validate, approve, execute, verify</p>
+            </div>
+          </div>
+        </section>
       </div>
     </AppShell>
   );

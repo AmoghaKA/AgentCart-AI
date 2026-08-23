@@ -1,5 +1,77 @@
 import Link from "next/link";
 
 export function GrowthOpportunity() {
-  return <article className="opportunity-card"><div className="opportunity-main"><div className="section-kicker"><span className="spark-dot">✦</span><span>AI Growth Opportunity</span><span className="opportunity-badge">REVENUE OPPORTUNITY DETECTED</span></div><h2>Turn every order into a <span>growth signal.</span></h2><p className="opportunity-copy">Customers purchasing <strong>CodePro Laptop</strong> are likely to benefit from complementary accessories.</p><div className="recommendation-box"><div className="product-row"><div className="product-thumb laptop">CP</div><div><strong>CodePro Laptop</strong><span>₹65,000</span></div><span className="base-tag">Current order</span></div><div className="recommendation-line"><span className="line-marker">+</span><div><strong>Wireless Mouse</strong><span>₹1,500</span></div><span className="add-label">AI recommendation</span></div><div className="recommendation-line"><span className="line-marker">+</span><div><strong>Laptop Backpack</strong><span>₹2,500</span></div></div><div className="order-total"><span>Potential order value</span><strong>₹69,000</strong></div><div className="additional-revenue"><span>Potential additional revenue</span><strong>+₹4,000</strong></div></div><p className="explanation">The AI identified these products as complementary items that can increase the merchant&apos;s average order value.</p><Link href="/growth-agent" className="primary-button">View AI Recommendation <span>↗</span></Link></div><div className="opportunity-visual"><div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" /><div className="visual-core"><span>₹</span><strong>4,000</strong><small>potential lift</small></div><div className="visual-label visual-label-top">Customer signal <span>•••</span></div><div className="visual-label visual-label-bottom"><span className="tiny-dot" /> 2 products matched</div></div></article>;
+  return (
+    <article className="opportunity-card">
+      <div className="opportunity-main">
+        <div className="section-kicker">
+          <span className="spark-dot">{"\u2726"}</span>
+          <span>AI Growth Opportunity</span>
+          <span className="opportunity-badge">REVENUE OPPORTUNITY DETECTED</span>
+        </div>
+        <h2>
+          Turn every order into a <span>growth signal.</span>
+        </h2>
+        <p className="opportunity-copy">
+          Customers purchasing <strong>CodePro Laptop</strong> are likely to
+          benefit from complementary accessories.
+        </p>
+        <div className="recommendation-box">
+          <div className="product-row">
+            <div className="product-thumb laptop">CP</div>
+            <div>
+              <strong>CodePro Laptop</strong>
+              <span>{"\u20B9"}65,000</span>
+            </div>
+            <span className="base-tag">Current order</span>
+          </div>
+          <div className="recommendation-line">
+            <span className="line-marker">+</span>
+            <div>
+              <strong>Wireless Mouse</strong>
+              <span>{"\u20B9"}1,500</span>
+            </div>
+            <span className="add-label">AI recommendation</span>
+          </div>
+          <div className="recommendation-line">
+            <span className="line-marker">+</span>
+            <div>
+              <strong>Laptop Backpack</strong>
+              <span>{"\u20B9"}2,500</span>
+            </div>
+          </div>
+          <div className="order-total">
+            <span>Potential order value</span>
+            <strong>{"\u20B9"}69,000</strong>
+          </div>
+          <div className="additional-revenue">
+            <span>Potential additional revenue</span>
+            <strong>+{"\u20B9"}4,000</strong>
+          </div>
+        </div>
+        <p className="explanation">
+          The AI identified these products as complementary items that can
+          increase the average order value.
+        </p>
+        <Link href="/growth-agent" className="primary-button">
+          View AI Recommendation <span>↗</span>
+        </Link>
+      </div>
+      <div className="opportunity-visual">
+        <div className="visual-orbit orbit-one" />
+        <div className="visual-orbit orbit-two" />
+        <div className="visual-core">
+          <span>{"\u20B9"}</span>
+          <strong>4,000</strong>
+          <small>potential lift</small>
+        </div>
+        <div className="visual-label visual-label-top">
+          Customer signal <span>···</span>
+        </div>
+        <div className="visual-label visual-label-bottom">
+          <span className="tiny-dot" /> 2 products matched
+        </div>
+      </div>
+    </article>
+  );
 }

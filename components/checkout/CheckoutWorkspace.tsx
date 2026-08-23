@@ -807,13 +807,13 @@ export function CheckoutWorkspace() {
       <header className="checkout-header">
         <div>
           <p className="eyebrow">
-            AGENTIC COMMERCE{" "}
-            <span className="eyebrow-slash">/</span> SAFE CHECKOUT
+            AI BUYER CHECKOUT{" "}
+            <span className="eyebrow-slash">/</span> SAFE PAYMENT
           </p>
-          <h1>Complete your purchase intent</h1>
+          <h1>Review your purchase</h1>
           <p className="header-subtitle">
-            Your Commerce Agent is guiding this order through review,
-            validation, and explicit approval.
+            Review your order, approve each step, and complete a safe
+            Razorpay Test Mode payment.
           </p>
         </div>
         <div className="checkout-header-actions">

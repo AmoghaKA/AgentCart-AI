@@ -292,13 +292,12 @@ export function BuyerWorkspace() {
       <header className="buyer-header">
         <div>
           <p className="eyebrow">
-            AGENTIC COMMERCE{" "}
-            <span className="eyebrow-slash">/</span> DISCOVERY
+            AI BUYER <span className="eyebrow-slash">/</span> PRODUCT DISCOVERY
           </p>
           <h1>AI Buyer</h1>
           <p className="header-subtitle">
-            Tell the AI buyer what you are looking for. It will search the
-            merchant catalog and find matching products.
+            Discover products from AI-ready merchants and prepare a safe
+            purchase.
           </p>
         </div>
         <span className="agent-commerce-badge">
