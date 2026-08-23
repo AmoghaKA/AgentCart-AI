@@ -178,6 +178,7 @@ function PurchaseIntent({
 export function BuyerWorkspace() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState(
     "Find me a laptop setup for programming under \u20B975,000"
   );
@@ -186,23 +187,28 @@ export function BuyerWorkspace() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() =>
-      setProducts(loadProducts())
-    );
-    return () => window.cancelAnimationFrame(frame);
+    let mounted = true;
+    (async () => {
+      const data = await loadProducts();
+      if (mounted) {
+        setProducts(data);
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   const liveCatalog = useMemo(() => toAgentCatalog(products), [products]);
 
-  const findProducts = () => {
-    const latest = loadProducts();
+  const findProducts = async () => {
+    const latest = await loadProducts();
     const catalog = toAgentCatalog(latest);
     const nextResult = searchBuyerCatalog(catalog.products, request);
     setProducts(latest);
     setResult(nextResult);
 
     const intent = parseBuyerIntent(request);
-    logAuditEvent({
+    await logAuditEvent({
       actor: "buyer",
       action: "Buyer request processed",
       category: "buyer",
@@ -248,8 +254,8 @@ export function BuyerWorkspace() {
     });
   };
 
-  const startCheckout = () => {
-    const latest = loadProducts();
+  const startCheckout = async () => {
+    const latest = await loadProducts();
     const latestById = new Map(latest.map((p) => [p.id, p]));
     const items: CheckoutItem[] = selected
       .flatMap((product) => {
@@ -269,8 +275,9 @@ export function BuyerWorkspace() {
           : [];
       });
     if (!items.length) return;
-    saveCheckoutSession(createCheckoutSession(items));
-    logAuditEvent({
+    const session = await createCheckoutSession(items);
+    await saveCheckoutSession(session);
+    await logAuditEvent({
       actor: "buyer",
       action: "Checkout session created",
       category: "checkout",
@@ -286,6 +293,16 @@ export function BuyerWorkspace() {
     });
     router.push("/checkout");
   };
+
+  if (loading) {
+    return (
+      <div className="buyer-page">
+        <div className="loading-state">
+          <p>Loading catalog from Supabase...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="buyer-page">

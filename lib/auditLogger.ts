@@ -1,81 +1,156 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   AuditEvent,
   AuditEventInput,
   AuditCategory,
   AuditStatus,
 } from "@/types/audit";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { DEMO_MERCHANT_ID } from "@/lib/config";
 
-const AUDIT_STORAGE_KEY = "agentcart_audit_events";
-
-function canUseStorage() {
-  return typeof window !== "undefined" && Boolean(window.localStorage);
+interface AuditEventRow {
+  id: string;
+  created_at: string;
+  actor: AuditEvent["actor"];
+  action: string;
+  category: AuditCategory;
+  status: AuditStatus;
+  description: string;
+  details: string | null;
+  amount: number | null;
+  currency: string | null;
+  reference_id: string | null;
 }
 
-function loadEvents(): AuditEvent[] {
-  if (!canUseStorage()) return [];
-  const stored = window.localStorage.getItem(AUDIT_STORAGE_KEY);
-  if (!stored) return [];
+function rowToEvent(row: AuditEventRow): AuditEvent {
+  return {
+    id: row.id,
+    timestamp: row.created_at,
+    actor: row.actor,
+    action: row.action,
+    category: row.category,
+    status: row.status,
+    description: row.description,
+    details: row.details || undefined,
+    amount: row.amount != null ? Number(row.amount) : undefined,
+    currency: row.currency || undefined,
+    referenceId: row.reference_id || undefined,
+  };
+}
+
+function q(): any {
+  return getSupabaseBrowserClient();
+}
+
+export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
   try {
-    const parsed: unknown = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as AuditEvent[]) : [];
+    const { data, error } = await q().from("audit_events").insert({
+      merchant_id: DEMO_MERCHANT_ID,
+      actor: input.actor,
+      action: input.action,
+      category: input.category,
+      status: input.status,
+      description: input.description,
+      details: input.details || null,
+      amount: input.amount ?? null,
+      currency: input.currency || null,
+      reference_id: input.referenceId || null,
+    }).select().single();
+
+    if (error) {
+      console.error("Failed to log audit event to Supabase:", error.message);
+      return {
+        ...input,
+        id: `audit-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return rowToEvent(data);
+  } catch (err) {
+    console.error("Supabase connection error for audit:", err);
+    return {
+      ...input,
+      id: `audit-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+export async function getAuditEvents(): Promise<AuditEvent[]> {
+  try {
+    const { data, error } = await q().from("audit_events").select("*").order("created_at", { ascending: false });
+    if (error) {
+      console.error("Failed to fetch audit events:", error.message);
+      return [];
+    }
+    return (data || []).map(rowToEvent);
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+    return [];
+  }
+}
+
+export async function getAuditEventById(id: string): Promise<AuditEvent | null> {
+  try {
+    const { data, error } = await q().from("audit_events").select("*").eq("id", id).single();
+    if (error || !data) return null;
+    return rowToEvent(data);
+  } catch {
+    return null;
+  }
+}
+
+export async function getAuditEventsByCategory(category: AuditCategory): Promise<AuditEvent[]> {
+  try {
+    const { data, error } = await q().from("audit_events").select("*").eq("category", category).order("created_at", { ascending: false });
+    if (error) return [];
+    return (data || []).map(rowToEvent);
   } catch {
     return [];
   }
 }
 
-function saveEvents(events: AuditEvent[]) {
-  if (canUseStorage()) {
-    window.localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(events));
+export async function getAuditEventsByStatus(status: AuditStatus): Promise<AuditEvent[]> {
+  try {
+    const { data, error } = await q().from("audit_events").select("*").eq("status", status).order("created_at", { ascending: false });
+    if (error) return [];
+    return (data || []).map(rowToEvent);
+  } catch {
+    return [];
   }
 }
 
-export function logAuditEvent(input: AuditEventInput): AuditEvent {
-  const event: AuditEvent = {
-    ...input,
-    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    timestamp: new Date().toISOString(),
-  };
-  const events = loadEvents();
-  events.unshift(event);
-  saveEvents(events);
-  return event;
+export async function clearAuditEvents(): Promise<void> {
+  try {
+    const { error } = await q().from("audit_events").delete().eq("merchant_id", DEMO_MERCHANT_ID);
+    if (error) {
+      console.error("Failed to clear audit events:", error.message);
+    }
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+  }
 }
 
-export function getAuditEvents(): AuditEvent[] {
-  return loadEvents().sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-}
-
-export function getAuditEventById(id: string): AuditEvent | null {
-  return loadEvents().find((e) => e.id === id) ?? null;
-}
-
-export function getAuditEventsByCategory(
-  category: AuditCategory
-): AuditEvent[] {
-  return getAuditEvents().filter((e) => e.category === category);
-}
-
-export function getAuditEventsByStatus(status: AuditStatus): AuditEvent[] {
-  return getAuditEvents().filter((e) => e.status === status);
-}
-
-export function clearAuditEvents() {
-  saveEvents([]);
-}
-
-export function getAuditStats(): {
+export async function getAuditStats(): Promise<{
   total: number;
   success: number;
   failed: number;
   blocked: number;
-} {
-  const events = loadEvents();
-  return {
-    total: events.length,
-    success: events.filter((e) => e.status === "success").length,
-    failed: events.filter((e) => e.status === "failed").length,
-    blocked: events.filter((e) => e.status === "blocked").length,
-  };
+}> {
+  try {
+    const { data, error } = await q().from("audit_events").select("status").eq("merchant_id", DEMO_MERCHANT_ID);
+    if (error || !data) {
+      return { total: 0, success: 0, failed: 0, blocked: 0 };
+    }
+    return {
+      total: data.length,
+      success: data.filter((e: any) => e.status === "success").length,
+      failed: data.filter((e: any) => e.status === "failed").length,
+      blocked: data.filter((e: any) => e.status === "blocked").length,
+    };
+  } catch {
+    return { total: 0, success: 0, failed: 0, blocked: 0 };
+  }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */

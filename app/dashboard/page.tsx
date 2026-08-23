@@ -7,8 +7,8 @@ import { GrowthOpportunity } from "@/components/dashboard/GrowthOpportunity";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { SafetyCard } from "@/components/dashboard/SafetyCard";
-import { metrics } from "@/lib/mockData";
 import { getAuditEvents } from "@/lib/auditLogger";
+import { getDashboardMetrics, type DashboardMetrics } from "@/lib/dashboardStats";
 import type { AuditEvent } from "@/types/audit";
 
 function RecentAuditEvents({ events }: { events: AuditEvent[] }) {
@@ -76,13 +76,36 @@ function RecentAuditEvents({ events }: { events: AuditEvent[] }) {
 
 export default function DashboardPage() {
   const [recentEvents, setRecentEvents] = useState<AuditEvent[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    totalRevenue: "\u20B90",
+    totalRevenueNum: 0,
+    aiInfluencedRevenue: "\u20B90",
+    aiInfluencedRevenueNum: 0,
+    potentialUpsell: "\u20B90",
+    potentialUpsellNum: 0,
+    totalOrders: 0,
+    totalProducts: 0,
+  });
 
   useEffect(() => {
-    const events = getAuditEvents()
-      .filter((e) => e.category === "payment")
-      .slice(0, 4);
-    setRecentEvents(events);
+    (async () => {
+      const [events, dashboardMetrics] = await Promise.all([
+        getAuditEvents(),
+        getDashboardMetrics(),
+      ]);
+      setRecentEvents(
+        events.filter((e) => e.category === "payment").slice(0, 4)
+      );
+      setMetrics(dashboardMetrics);
+    })();
   }, []);
+
+  const metricCards = [
+    { label: "Total Revenue", value: metrics.totalRevenue, detail: "Total merchant revenue", tone: "neutral" },
+    { label: "AI-Influenced Revenue", value: metrics.aiInfluencedRevenue, detail: "Revenue from AI recommendations", tone: "positive" },
+    { label: "Potential Upsell Revenue", value: metrics.potentialUpsell, detail: "Revenue opportunities identified", tone: "amber" },
+    { label: "Total Orders", value: String(metrics.totalOrders), detail: "Completed orders", tone: "neutral" },
+  ];
 
   return (
     <AppShell>
@@ -109,7 +132,7 @@ export default function DashboardPage() {
           </div>
         </header>
         <section className="metrics-grid">
-          {metrics.map((metric, index) => (
+          {metricCards.map((metric, index) => (
             <MetricCard metric={metric} index={index} key={metric.label} />
           ))}
         </section>

@@ -1,48 +1,131 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Product } from "@/types/product";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { DEMO_MERCHANT_ID } from "@/lib/config";
 
-const CATALOG_STORAGE_KEY = "agentcart-ai-catalog";
-
-export const demoProducts: Product[] = [
-  { id: "codepro-laptop", name: "CodePro Laptop", description: "High-performance laptop suitable for programming, development, and professional work.", category: "Laptops", price: 65000, stock: 10, image: "laptop", createdAt: "2026-08-01T09:00:00.000Z", updatedAt: "2026-08-01T09:00:00.000Z" },
-  { id: "wireless-mouse", name: "Wireless Mouse", description: "Ergonomic wireless mouse designed for productivity and everyday work.", category: "Accessories", price: 1500, stock: 50, image: "mouse", createdAt: "2026-08-01T09:05:00.000Z", updatedAt: "2026-08-01T09:05:00.000Z" },
-  { id: "laptop-backpack", name: "Laptop Backpack", description: "Protective backpack designed for laptops, accessories, and daily commuting.", category: "Accessories", price: 2500, stock: 30, image: "backpack", createdAt: "2026-08-01T09:10:00.000Z", updatedAt: "2026-08-01T09:10:00.000Z" },
-  { id: "mechanical-keyboard", name: "Mechanical Keyboard", description: "Mechanical keyboard designed for programmers, professionals, and productivity.", category: "Accessories", price: 4000, stock: 20, image: "keyboard", createdAt: "2026-08-01T09:15:00.000Z", updatedAt: "2026-08-01T09:15:00.000Z" },
-  { id: "monitor-24-inch", name: "Monitor 24-inch", description: "Full HD 24-inch monitor suitable for coding, professional work, and multitasking.", category: "Monitors", price: 12000, stock: 15, image: "monitor", createdAt: "2026-08-01T09:20:00.000Z", updatedAt: "2026-08-01T09:20:00.000Z" },
-];
-
-function canUseStorage() {
-  return typeof window !== "undefined" && Boolean(window.localStorage);
+interface ProductRow {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  stock: number;
+  image: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-export function loadProducts(): Product[] {
-  if (!canUseStorage()) return demoProducts;
-  const stored = window.localStorage.getItem(CATALOG_STORAGE_KEY);
-  if (!stored) {
-    saveProducts(demoProducts);
-    return demoProducts;
-  }
+function rowToProduct(row: ProductRow): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    category: row.category,
+    price: Number(row.price),
+    stock: row.stock,
+    image: row.image || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function q(): any {
+  return getSupabaseBrowserClient();
+}
+
+export async function loadProducts(): Promise<Product[]> {
   try {
-    const parsed: unknown = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed as Product[] : demoProducts;
-  } catch {
-    return demoProducts;
+    const { data, error } = await q().from("products").select("*").eq("merchant_id", DEMO_MERCHANT_ID).order("created_at", { ascending: true });
+    if (error) {
+      console.error("Failed to load products from Supabase:", error.message);
+      return [];
+    }
+    return (data || []).map(rowToProduct);
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+    return [];
   }
 }
 
-export function saveProducts(products: Product[]) {
-  if (canUseStorage()) window.localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(products));
+export async function addProduct(product: Product): Promise<Product | null> {
+  try {
+    const { data, error } = await q().from("products").insert({
+      id: product.id,
+      merchant_id: DEMO_MERCHANT_ID,
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      price: product.price,
+      stock: product.stock,
+      image: product.image,
+      created_at: product.createdAt,
+      updated_at: product.updatedAt,
+    }).select().single();
+    if (error) {
+      console.error("Failed to add product to Supabase:", error.message);
+      return null;
+    }
+    return data ? rowToProduct(data) : null;
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+    return null;
+  }
 }
 
-export function addProduct(product: Product) {
-  const products = loadProducts();
-  saveProducts([...products, product]);
+export async function updateProduct(product: Product): Promise<Product | null> {
+  try {
+    const { data, error } = await q().from("products").update({
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      price: product.price,
+      stock: product.stock,
+      image: product.image,
+      updated_at: product.updatedAt,
+    }).eq("id", product.id).select().single();
+    if (error) {
+      console.error("Failed to update product in Supabase:", error.message);
+      return null;
+    }
+    return data ? rowToProduct(data) : null;
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+    return null;
+  }
 }
 
-export function updateProduct(product: Product) {
-  const products = loadProducts().map((current) => current.id === product.id ? product : current);
-  saveProducts(products);
+export async function deleteProduct(id: string): Promise<boolean> {
+  try {
+    const { error } = await q().from("products").delete().eq("id", id);
+    if (error) {
+      console.error("Failed to delete product from Supabase:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Supabase connection error:", err);
+    return false;
+  }
 }
 
-export function deleteProduct(id: string) {
-  saveProducts(loadProducts().filter((product) => product.id !== id));
+export async function getProductById(id: string): Promise<Product | null> {
+  try {
+    const { data, error } = await q().from("products").select("*").eq("id", id).single();
+    if (error || !data) return null;
+    return rowToProduct(data);
+  } catch {
+    return null;
+  }
 }
+
+export async function loadProductsServer(): Promise<Product[]> {
+  const { getSupabaseServerClient } = await import("@/lib/supabase/server");
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase.from("products").select("*").eq("merchant_id", DEMO_MERCHANT_ID).order("created_at", { ascending: true }) as any;
+  if (error) {
+    console.error("Failed to load products (server):", error.message);
+    return [];
+  }
+  return (data || []).map(rowToProduct);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */

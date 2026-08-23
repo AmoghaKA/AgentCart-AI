@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 interface VerifyPaymentRequest {
   razorpay_order_id: string;
@@ -56,6 +58,29 @@ export async function POST(request: NextRequest) {
         { error: "Payment signature verification failed" },
         { status: 400 }
       );
+    }
+
+    // Update Supabase order with payment verification
+    try {
+      const supabase = getSupabaseServerClient();
+      const { data: order } = await (supabase
+        .from("orders" as any)
+        .select("id")
+        .eq("razorpay_order_id", razorpay_order_id)
+        .single() as any);
+
+      if (order) {
+        await (supabase
+          .from("orders" as any)
+          .update({
+            status: "payment_verified",
+            razorpay_payment_id: razorpay_payment_id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id) as any);
+      }
+    } catch (dbError) {
+      console.error("Failed to update order in Supabase:", dbError);
     }
 
     return NextResponse.json({

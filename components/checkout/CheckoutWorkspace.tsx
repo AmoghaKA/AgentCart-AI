@@ -10,6 +10,7 @@ import {
   updateCheckoutSession,
   isOrderCreationAllowed,
   approvePayment,
+  approveOrderCreation,
 } from "@/lib/checkoutStorage";
 import {
   MAX_QUANTITY_PER_ORDER,
@@ -18,13 +19,12 @@ import {
 } from "@/lib/safety";
 import { evaluateActionControl } from "@/lib/actionControls";
 import { logAuditEvent } from "@/lib/auditLogger";
+import { MERCHANT_NAME } from "@/lib/config";
 import type { CheckoutItem, CheckoutSession } from "@/types/checkout";
 import type { MoneyActionControl } from "@/types/actionControl";
 import type { Product } from "@/types/product";
 import { ProductVisual } from "@/components/catalog/ProductCard";
 import { ActionControlPanel } from "./ActionControlPanel";
-import { ActionBlockedReasons } from "./ActionBlockedReason";
-import { CommerceSafetyOverview } from "./CommerceSafetyOverview";
 import { PaymentApprovalGate } from "./PaymentApprovalGate";
 import { PaymentFailure } from "./PaymentFailure";
 
@@ -349,14 +349,19 @@ export function CheckoutWorkspace() {
   const { sdkLoaded } = useRazorpayCheckout();
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const loaded = loadCheckoutSession();
-      const catalog = loadProducts();
-      setSession(loaded);
-      setProducts(catalog);
-      if (loaded) setValidation(validateCheckout(loaded.items, catalog));
-    });
-    return () => window.cancelAnimationFrame(frame);
+    let mounted = true;
+    (async () => {
+      const [loaded, catalog] = await Promise.all([
+        loadCheckoutSession(),
+        loadProducts(),
+      ]);
+      if (mounted) {
+        setSession(loaded);
+        setProducts(catalog);
+        if (loaded) setValidation(validateCheckout(loaded.items, catalog));
+      }
+    })();
+    return () => { mounted = false; };
   }, [refreshKey]);
 
   const recommendation = useMemo(() => {
@@ -428,9 +433,9 @@ export function CheckoutWorkspace() {
     );
   }, [session, products]);
 
-  const updateSession = (nextItems: CheckoutItem[], message: string) => {
+  const updateSession = async (nextItems: CheckoutItem[], message: string) => {
     if (!session) return;
-    const next = updateCheckoutSession(session, {
+    const next = await updateCheckoutSession(session, {
       items: nextItems,
       subtotal: nextItems.reduce(
         (sum, item) => sum + itemTotal(item, products),
@@ -451,7 +456,7 @@ export function CheckoutWorkspace() {
       paymentApprovedAction: undefined,
       paymentApprovedOrderId: undefined,
     });
-    const withActivity = addCheckoutActivity(next, message);
+    const withActivity = await addCheckoutActivity(next, message);
     setSession(withActivity);
     setValidation(validateCheckout(nextItems, products));
   };
@@ -473,10 +478,10 @@ export function CheckoutWorkspace() {
     setDeclinedRecommendationId(undefined);
   };
 
-  const declineSuggestion = () => {
+  const declineSuggestion = async () => {
     if (!session || !recommendation) return;
     setSession(
-      addCheckoutActivity(session, `Buyer declined ${recommendation.name}`)
+      await addCheckoutActivity(session, `Buyer declined ${recommendation.name}`)
     );
     setDeclinedRecommendationId(recommendation.id);
   };
@@ -507,58 +512,60 @@ export function CheckoutWorkspace() {
     );
   };
 
-  const approve = () => {
+  const approve = async () => {
     if (!session) return;
-    const latestProducts = loadProducts();
+    const latestProducts = await loadProducts();
     const latestValidation = validateCheckout(session.items, latestProducts);
     setProducts(latestProducts);
     setValidation(latestValidation);
     if (!latestValidation.passed) return;
     const now = new Date().toISOString();
-    const approved = updateCheckoutSession(session, {
+    const approvedAmount = session.items.reduce(
+      (sum, item) => sum + itemTotal(item, latestProducts),
+      0
+    );
+    const approved = await updateCheckoutSession(session, {
       status: "approved",
       approvalStatus: "approved",
       approvedAt: now,
-      approvedAmount: session.items.reduce(
-        (sum, item) => sum + itemTotal(item, latestProducts),
-        0
-      ),
+      approvedAmount,
       approvedAction: "CREATE_RAZORPAY_TEST_ORDER",
     });
-    const withActivity = addCheckoutActivity(
+    await approveOrderCreation(approved, approvedAmount);
+    const withActivity = await addCheckoutActivity(
       approved,
       "Buyer approved Razorpay order creation"
     );
     setSession(withActivity);
     setDeclinedRecommendationId(undefined);
-    logAuditEvent({ actor: "buyer", action: "Buyer approved order creation", category: "checkout", status: "success", description: `Buyer approved creation of Razorpay test-mode order for ₹${session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0).toLocaleString("en-IN")}`, amount: session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0), currency: "INR", referenceId: session.id });
+    await logAuditEvent({ actor: "buyer", action: "Buyer approved order creation", category: "checkout", status: "success", description: `Buyer approved creation of Razorpay test-mode order for ₹${session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0).toLocaleString("en-IN")}`, amount: session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0), currency: "INR", referenceId: session.id });
   };
 
-  const approvePaymentAction = () => {
+  const approvePaymentAction = async () => {
     if (!session || !session.razorpayOrderId) return;
     const amount = session.razorpayOrderAmount ?? 0;
-    const updated = approvePayment(session, session.razorpayOrderId, amount);
-    const withActivity = addCheckoutActivity(
+    const updated = await approvePayment(session, session.razorpayOrderId, amount);
+    const withActivity = await addCheckoutActivity(
       updated,
       `Buyer approved opening Razorpay payment for ${money(amount)}`
     );
     setSession(withActivity);
-    logAuditEvent({ actor: "buyer", action: "Buyer approved payment", category: "payment", status: "success", description: `Buyer approved opening Razorpay payment for ₹${amount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount, currency: "INR", referenceId: session.razorpayOrderId });
+    await logAuditEvent({ actor: "buyer", action: "Buyer approved payment", category: "payment", status: "success", description: `Buyer approved opening Razorpay payment for ₹${amount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount, currency: "INR", referenceId: session.razorpayOrderId });
   };
 
-  const cancelCheckout = () => {
+  const cancelCheckout = async () => {
     if (!session) return;
-    const next = updateCheckoutSession(session, {
+    const next = await updateCheckoutSession(session, {
       status: "cancelled",
     });
-    const withActivity = addCheckoutActivity(
+    const withActivity = await addCheckoutActivity(
       next,
       "Checkout cancelled by buyer"
     );
     setSession(withActivity);
     setCancelled(true);
     setCancelOpen(false);
-    logAuditEvent({ actor: "buyer", action: "Checkout cancelled", category: "checkout", status: "success", description: `Checkout ${session.id} cancelled by buyer — no payment was made`, referenceId: session.id });
+    await logAuditEvent({ actor: "buyer", action: "Checkout cancelled", category: "checkout", status: "success", description: `Checkout ${session.id} cancelled by buyer — no payment was made`, referenceId: session.id });
   };
 
   const createRazorpayOrder = async () => {
@@ -574,7 +581,7 @@ export function CheckoutWorkspace() {
       );
       return;
     }
-    const latestProducts = loadProducts();
+    const latestProducts = await loadProducts();
     const currentTotal = session.items.reduce(
       (sum, item) => sum + itemTotal(item, latestProducts),
       0
@@ -604,30 +611,30 @@ export function CheckoutWorkspace() {
       const data = await res.json();
       if (res.ok && data.orderId) {
         const now = new Date().toISOString();
-        const updated = updateCheckoutSession(session, {
+        const updated = await updateCheckoutSession(session, {
           razorpayOrderId: data.orderId,
-          razorpayOrderAmount: data.amount,
+          razorpayOrderAmount: data.amount / 100,
           razorpayOrderCreatedAt: now,
           status: "order_created",
           orderCreationStatus: "created",
         });
-        const withActivity = addCheckoutActivity(
+        const withActivity = await addCheckoutActivity(
           updated,
           `Razorpay test order created: ${data.orderId}`
         );
         setSession(withActivity);
-        logAuditEvent({ actor: "agent", action: "Razorpay order created", category: "payment", status: "success", description: `Razorpay test-mode order ${data.orderId} created for ₹${(data.amount / 100).toLocaleString("en-IN")}`, amount: data.amount / 100, currency: "INR", referenceId: data.orderId });
+        await logAuditEvent({ actor: "agent", action: "Razorpay order created", category: "payment", status: "success", description: `Razorpay test-mode order ${data.orderId} created for ₹${(data.amount / 100).toLocaleString("en-IN")}`, amount: data.amount / 100, currency: "INR", referenceId: data.orderId });
       } else {
         const errorMsg = data.error || "Failed to create Razorpay order. Please try again.";
         alert(errorMsg);
-        logAuditEvent({ actor: "system", action: "Order creation failed", category: "payment", status: "failed", description: `Razorpay order creation failed: ${errorMsg}`, referenceId: session.id });
+        await logAuditEvent({ actor: "system", action: "Order creation failed", category: "payment", status: "failed", description: `Razorpay order creation failed: ${errorMsg}`, referenceId: session.id });
       }
     } catch (error: unknown) {
       console.error("Razorpay order creation error:", error);
       alert(
         "Failed to create Razorpay order. Please try again."
       );
-      logAuditEvent({ actor: "system", action: "Order creation failed", category: "payment", status: "failed", description: `Razorpay order creation request failed: ${error instanceof Error ? error.message : "Network or server error"}`, referenceId: session?.id });
+      await logAuditEvent({ actor: "system", action: "Order creation failed", category: "payment", status: "failed", description: `Razorpay order creation request failed: ${error instanceof Error ? error.message : "Network or server error"}`, referenceId: session?.id });
     } finally {
       setOrderCreationInProgress(false);
     }
@@ -654,41 +661,41 @@ export function CheckoutWorkspace() {
       );
       const data = await res.json();
       if (res.ok && data.verified) {
-        const updated = updateCheckoutSession(session, {
+        const updated = await updateCheckoutSession(session, {
           status: "payment_verified",
         });
-        const withActivity = addCheckoutActivity(
+        const withActivity = await addCheckoutActivity(
           updated,
           "Razorpay payment verified successfully"
         );
         setSession(withActivity);
-        logAuditEvent({ actor: "system", action: "Payment verified successfully", category: "payment", status: "success", description: `Razorpay payment verified — order: ${orderId}, payment: ${paymentId}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: paymentId });
+        await logAuditEvent({ actor: "system", action: "Payment verified successfully", category: "payment", status: "success", description: `Razorpay payment verified — order: ${orderId}, payment: ${paymentId}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: paymentId });
       } else {
-        const updated = updateCheckoutSession(session, {
+        const updated = await updateCheckoutSession(session, {
           status: "payment_failed",
         });
-        const withActivity = addCheckoutActivity(
+        const withActivity = await addCheckoutActivity(
           updated,
           "Razorpay payment verification failed"
         );
         setSession(withActivity);
-        logAuditEvent({ actor: "system", action: "Payment verification failed", category: "payment", status: "failed", description: `Razorpay payment verification failed — order: ${orderId}, payment: ${paymentId}`, referenceId: paymentId });
+        await logAuditEvent({ actor: "system", action: "Payment verification failed", category: "payment", status: "failed", description: `Razorpay payment verification failed — order: ${orderId}, payment: ${paymentId}`, referenceId: paymentId });
       }
     } catch (error: unknown) {
       console.error("Payment verification error:", error);
-      const updated = updateCheckoutSession(session, {
+      const updated = await updateCheckoutSession(session, {
         status: "payment_failed",
       });
-      const withActivity = addCheckoutActivity(
+      const withActivity = await addCheckoutActivity(
         updated,
         "Payment verification request failed"
       );
       setSession(withActivity);
-      logAuditEvent({ actor: "system", action: "Payment verification failed", category: "payment", status: "failed", description: `Payment verification request failed: ${error instanceof Error ? error.message : "Network or server error"}`, referenceId: session.id });
+      await logAuditEvent({ actor: "system", action: "Payment verification failed", category: "payment", status: "failed", description: `Payment verification request failed: ${error instanceof Error ? error.message : "Network or server error"}`, referenceId: session.id });
     }
   };
 
-  const openRazorpayPayment = () => {
+  const openRazorpayPayment = async () => {
     if (
       !session ||
       !session.razorpayOrderId ||
@@ -706,18 +713,18 @@ export function CheckoutWorkspace() {
       return;
     }
     setPaymentAttempting(true);
-    logAuditEvent({ actor: "agent", action: "Razorpay payment opened", category: "payment", status: "success", description: `Razorpay payment interface opened for ₹${amount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount, currency: "INR", referenceId: session.razorpayOrderId });
+    await logAuditEvent({ actor: "agent", action: "Razorpay payment opened", category: "payment", status: "success", description: `Razorpay payment interface opened for ₹${amount.toLocaleString("en-IN")} (order: ${session.razorpayOrderId})`, amount, currency: "INR", referenceId: session.razorpayOrderId });
     const options = {
       key: keyId,
       order_id: session.razorpayOrderId,
-      amount: amount,
+      amount: amount * 100,
       currency: "INR",
-      name: "AgentCart Demo Store",
+      name: MERCHANT_NAME,
       description: "Safe AI-assisted commerce checkout",
       theme: { color: "#d97706" },
       prefill: { name: "", email: "", contact: "" },
       notes: { merchant: "AgentCart" },
-      handler: function (response: {
+      handler: async function (response: {
         razorpay_payment_id?: string;
         razorpay_order_id?: string;
         razorpay_signature?: string;
@@ -731,15 +738,15 @@ export function CheckoutWorkspace() {
           !response.razorpay_signature
         ) {
           if (session) {
-            const updated = updateCheckoutSession(session, {
+            const updated = await updateCheckoutSession(session, {
               status: "payment_failed",
             });
-            const withActivity = addCheckoutActivity(
+            const withActivity = await addCheckoutActivity(
               updated,
               "Razorpay payment was not completed"
             );
             setSession(withActivity);
-            logAuditEvent({ actor: "system", action: "Payment failed", category: "payment", status: "failed", description: `Razorpay payment was not completed — order: ${session.razorpayOrderId ?? "N/A"}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: session.razorpayOrderId ?? undefined });
+            await logAuditEvent({ actor: "system", action: "Payment failed", category: "payment", status: "failed", description: `Razorpay payment was not completed — order: ${session.razorpayOrderId ?? "N/A"}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: session.razorpayOrderId ?? undefined });
           }
           return;
         }
@@ -762,21 +769,21 @@ export function CheckoutWorkspace() {
     } catch {
       setPaymentAttempting(false);
       alert("Failed to open Razorpay Checkout.");
-      logAuditEvent({ actor: "system", action: "Payment failed", category: "payment", status: "failed", description: `Failed to open Razorpay Checkout for order: ${session?.razorpayOrderId ?? "N/A"}`, amount: session?.razorpayOrderAmount ?? session?.approvedAmount ?? 0, currency: "INR", referenceId: session?.razorpayOrderId ?? undefined });
+      await logAuditEvent({ actor: "system", action: "Payment failed", category: "payment", status: "failed", description: `Failed to open Razorpay Checkout for order: ${session?.razorpayOrderId ?? "N/A"}`, amount: session?.razorpayOrderAmount ?? session?.approvedAmount ?? 0, currency: "INR", referenceId: session?.razorpayOrderId ?? undefined });
     }
   };
 
-  const retryPayment = () => {
+  const retryPayment = async () => {
     if (!session || !session.razorpayOrderId) return;
-    const updated = updateCheckoutSession(session, {
+    const updated = await updateCheckoutSession(session, {
       status: "order_created",
     });
-    const withActivity = addCheckoutActivity(
+    const withActivity = await addCheckoutActivity(
       updated,
       "Buyer initiated payment retry"
     );
     setSession(withActivity);
-    logAuditEvent({ actor: "buyer", action: "Payment retry initiated", category: "payment", status: "success", description: `Buyer initiated payment retry for order: ${session.razorpayOrderId}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: session.razorpayOrderId });
+    await logAuditEvent({ actor: "buyer", action: "Payment retry initiated", category: "payment", status: "success", description: `Buyer initiated payment retry for order: ${session.razorpayOrderId}`, amount: session.razorpayOrderAmount ?? session.approvedAmount ?? 0, currency: "INR", referenceId: session.razorpayOrderId });
   };
 
   if (!session || cancelled || session.status === "cancelled")
@@ -836,71 +843,40 @@ export function CheckoutWorkspace() {
         </div>
       </header>
 
-      <div className="checkout-flow">
-        <span
-          className={
-            session.status === "reviewing" ||
-            session.status === "approved" ||
-            session.status === "order_created" ||
-            session.status === "payment_verified"
-              ? "flow-active"
-              : ""
-          }
-        >
-          01 Review
-        </span>
-        <i />
-        <span
-          className={
-            validation.passed &&
-            (session.status === "approved" ||
-              session.status === "order_created" ||
-              session.status === "payment_verified")
-              ? "flow-active"
-              : validation.passed
-                ? "flow-active"
-                : ""
-          }
-        >
-          02 Safety Check
-        </span>
-        <i />
-        <span
-          className={
-            session.status === "approved" ||
-            session.status === "order_created" ||
-            session.status === "payment_verified"
-              ? "flow-active"
-              : ""
-          }
-        >
-          03 Approval
-        </span>
-        <i />
-        <span
-          className={
-            session.status === "order_created" ||
-            session.status === "payment_verified"
-              ? "flow-active"
-              : ""
-          }
-        >
-          04 Execute
-        </span>
-        <i />
-        <span
-          className={
-            session.status === "payment_verified" ? "flow-active" : ""
-          }
-        >
-          05 Verify
-        </span>
+      <div className="checkout-steps">
+        <div className={`checkout-step ${session.status === "reviewing" ? "active" : ["approved","order_created","payment_verified"].includes(session.status) ? "done" : ""}`}>
+          <span className="step-number">{["approved","order_created","payment_verified"].includes(session.status) ? "✓" : "1"}</span>
+          <span className="step-label">Review</span>
+        </div>
+        <div className={`checkout-step ${validation.passed && session.status !== "reviewing" ? "done" : session.status === "reviewing" ? "active" : ""}`}>
+          <span className="step-number">{validation.passed && session.status !== "reviewing" ? "✓" : "2"}</span>
+          <span className="step-label">Safety Check</span>
+        </div>
+        <div className={`checkout-step ${["approved","order_created","payment_verified"].includes(session.status) ? "done" : session.status === "reviewing" ? "active" : ""}`}>
+          <span className="step-number">{["order_created","payment_verified"].includes(session.status) ? "✓" : "3"}</span>
+          <span className="step-label">Approval</span>
+        </div>
+        <div className={`checkout-step ${["order_created","payment_verified"].includes(session.status) ? "done" : session.status === "approved" ? "active" : ""}`}>
+          <span className="step-number">{session.status === "payment_verified" ? "✓" : "4"}</span>
+          <span className="step-label">Create Order</span>
+        </div>
+        <div className={`checkout-step ${session.status === "payment_verified" ? "done" : session.status === "order_created" ? "active" : ""}`}>
+          <span className="step-number">{session.status === "payment_verified" ? "✓" : "5"}</span>
+          <span className="step-label">Payment</span>
+        </div>
       </div>
 
-      <CommerceSafetyOverview
-        orderControl={orderControl}
-        paymentControl={paymentControl}
-      />
+      <div className="checkout-safety-bar">
+        <div className="safety-bar-icon">{"\u2713"}</div>
+        <span className="safety-bar-text">All safety checks passed — prices verified, stock confirmed, transaction limits respected</span>
+        <div className="safety-bar-items">
+          {validation.checks.map((check) => (
+            <span className="safety-bar-item" key={check.label}>
+              {check.passed ? "\u2713" : "\u2717"} {check.label}
+            </span>
+          ))}
+        </div>
+      </div>
 
       <div className="checkout-layout">
         <div className="checkout-main">
@@ -936,29 +912,20 @@ export function CheckoutWorkspace() {
       </div>
 
       {/* Action Control Panel — Explains the current money action */}
-      {(session.status === "reviewing" ||
-        session.status === "approved" ||
-        session.status === "creating_order" ||
-        session.status === "order_created") && (
-        <>
-          <ActionControlPanel
-            control={orderControl}
-            explanation={{
-              action: "Create Razorpay Test-Mode Order",
-              amount: total,
-              currency: "INR",
-              reason:
-                "The buyer selected these products and explicitly approved order creation after reviewing the complete order.",
-              merchant: "AgentCart Demo Store",
-              result:
-                "A Razorpay Test Mode order will be created. No payment will be completed automatically.",
-            }}
-          />
-          {orderControl.blockedReasons.length > 0 &&
-            session.status === "reviewing" && (
-              <ActionBlockedReasons reasons={orderControl.blockedReasons} />
-            )}
-        </>
+      {(session.status === "reviewing" || session.status === "approved") && (
+        <ActionControlPanel
+          control={orderControl}
+          explanation={{
+            action: "Create Razorpay Test-Mode Order",
+            amount: total,
+            currency: "INR",
+            reason:
+              "The buyer selected these products and explicitly approved order creation after reviewing the complete order.",
+            merchant: MERCHANT_NAME,
+            result:
+              "A Razorpay Test Mode order will be created. No payment will be completed automatically.",
+          }}
+        />
       )}
 
       {/* Payment Action Control Panel — After order is created */}
@@ -967,44 +934,35 @@ export function CheckoutWorkspace() {
         session.status === "payment_verifying" ||
         session.status === "payment_verified" ||
         session.status === "payment_failed") && (
-        <>
-          <ActionControlPanel
-            control={paymentControl}
-            explanation={{
-              action: "Open Razorpay Test Payment",
-              amount:
-                session.razorpayOrderAmount ??
-                session.approvedAmount ??
-                total,
-              currency: "INR",
-              reason:
-                "A valid Razorpay Test Mode order was successfully created for the buyer's approved checkout.",
-              merchant: "AgentCart Demo Store",
-              result:
-                "The buyer will be redirected into Razorpay's secure Test Mode payment interface. The AI agent cannot complete the payment on the buyer's behalf.",
-            }}
-            orderId={session.razorpayOrderId}
-          />
-          {paymentControl.blockedReasons.length > 0 &&
-            session.status === "order_created" && (
-              <ActionBlockedReasons
-                reasons={paymentControl.blockedReasons}
-              />
-            )}
-        </>
+        <ActionControlPanel
+          control={paymentControl}
+          explanation={{
+            action: "Open Razorpay Test Payment",
+            amount:
+              session.razorpayOrderAmount ??
+              session.approvedAmount ??
+              total,
+            currency: "INR",
+            reason:
+              "A valid Razorpay Test Mode order was successfully created for the buyer's approved checkout.",
+            merchant: MERCHANT_NAME,
+            result:
+              "The buyer will be redirected into Razorpay's secure Test Mode payment interface. The AI agent cannot complete the payment on the buyer's behalf.",
+          }}
+          orderId={session.razorpayOrderId}
+        />
       )}
 
       {/* Order Approval Gate */}
       {session.status === "reviewing" && (
         <section className="approval-gate">
           <div>
-            <p className="eyebrow">EXPLICIT APPROVAL GATE</p>
+            <p className="eyebrow">APPROVAL REQUIRED</p>
             <h2>Ready for Approval</h2>
             <p>
-              Your order has passed all safety checks. I am ready to create a
-              Razorpay test-mode order for <strong>{money(total)}</strong>,
-              but I cannot perform this money action without your explicit
-              approval.
+              Your order has passed all safety checks. Approve to create a
+              Razorpay test-mode order for <strong>{money(total)}</strong>.
+              No payment will be made without a separate approval step.
             </p>
           </div>
           <div className="approval-buttons">
@@ -1012,14 +970,14 @@ export function CheckoutWorkspace() {
               className="secondary-button"
               onClick={() => setCancelOpen(true)}
             >
-              Cancel Checkout
+              Cancel
             </button>
             <button
               className="primary-button"
               onClick={approve}
               disabled={!validation.passed}
             >
-              Approve Order Creation <span>{"\u2192"}</span>
+              Approve & Create Order <span>{"\u2192"}</span>
             </button>
           </div>
         </section>
@@ -1030,7 +988,7 @@ export function CheckoutWorkspace() {
         <section className="approval-recorded">
           <span>{"\u2713"}</span>
           <div>
-            <strong>Approval recorded successfully.</strong>
+            <strong>Approval recorded successfully</strong>
             <p>Razorpay test-mode order creation is ready.</p>
           </div>
         </section>
@@ -1050,28 +1008,29 @@ export function CheckoutWorkspace() {
               </div>
             </div>
             <p className="proposed-note">
-              You explicitly approved the creation of a Razorpay test-mode
-              order for {money(session.approvedAmount ?? total)}. The amount
-              and items are locked to your approved checkout.
+              Create a Razorpay test-mode order for{" "}
+              <strong>{money(session.approvedAmount ?? total)}</strong>.
+              This does not charge any money — it only creates the order.
             </p>
             <div className="proposed-grid">
               <div>
-                <span>Approved Action</span>
-                <strong>Create Razorpay Test Order</strong>
-              </div>
-              <div>
-                <span>Approved Amount</span>
+                <span>Amount</span>
                 <strong>{money(session.approvedAmount ?? total)}</strong>
               </div>
               <div>
+                <span>Currency</span>
+                <strong>INR</strong>
+              </div>
+              <div>
+                <span>Mode</span>
+                <strong>Test (no real charges)</strong>
+              </div>
+              <div>
                 <span>Status</span>
-                <strong>Ready to create order</strong>
+                <strong>Ready to create</strong>
               </div>
             </div>
-            <div
-              className="approval-buttons"
-              style={{ marginTop: "1rem" }}
-            >
+            <div className="approval-buttons">
               <button
                 className="primary-button"
                 onClick={createRazorpayOrder}
@@ -1079,7 +1038,8 @@ export function CheckoutWorkspace() {
               >
                 {orderCreationInProgress
                   ? "Creating order..."
-                  : "Create Razorpay Test Order"}
+                  : "Create Razorpay Test Order"}{" "}
+                <span>{"\u2192"}</span>
               </button>
             </div>
           </section>
@@ -1089,15 +1049,20 @@ export function CheckoutWorkspace() {
       {session.status === "order_created" &&
         session.razorpayOrderId && (
           <section className="proposed-action">
-            <div className="checkout-section-heading">
+            <div className="proposed-action-heading">
+              <div className="proposed-icon">{"\u2713"}</div>
               <div>
                 <p className="eyebrow">RAZORPAY TEST ORDER</p>
-                <h2>Secure Test Order Created</h2>
+                <h2>Order Created Successfully</h2>
               </div>
             </div>
+            <p className="proposed-note">
+              A Razorpay test-mode order has been created. Next, approve to
+              open the secure payment interface.
+            </p>
             <div className="proposed-grid">
               <div>
-                <span>Razorpay Order ID</span>
+                <span>Order ID</span>
                 <strong>{session.razorpayOrderId}</strong>
               </div>
               <div>
@@ -1107,12 +1072,12 @@ export function CheckoutWorkspace() {
                 </strong>
               </div>
               <div>
-                <span>Currency</span>
-                <strong>INR</strong>
+                <span>Mode</span>
+                <strong>Test (no real charges)</strong>
               </div>
               <div>
                 <span>Status</span>
-                <strong>Order Created</strong>
+                <strong>Awaiting payment</strong>
               </div>
             </div>
           </section>
@@ -1136,9 +1101,13 @@ export function CheckoutWorkspace() {
             <div className="proposed-icon">{"\u2713"}</div>
             <div>
               <p className="eyebrow">PAYMENT VERIFIED</p>
-              <h2>Payment Verified Successfully</h2>
+              <h2>Payment Complete</h2>
             </div>
           </div>
+          <p className="proposed-note">
+            Your payment has been verified securely on the server. The
+            transaction is complete.
+          </p>
           <div className="proposed-grid">
             <div>
               <span>Order ID</span>
@@ -1154,12 +1123,9 @@ export function CheckoutWorkspace() {
             </div>
             <div>
               <span>Status</span>
-              <strong>Payment Verified</strong>
+              <strong>Verified</strong>
             </div>
           </div>
-          <p className="proposed-note">
-            The payment was verified securely on the server.
-          </p>
         </section>
       )}
 

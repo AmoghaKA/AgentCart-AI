@@ -10,6 +10,7 @@ import type {
 } from "@/types/actionControl";
 import type { Product } from "@/types/product";
 import { MAX_TRANSACTION_AMOUNT, MAX_QUANTITY_PER_ORDER } from "./safety";
+import { MERCHANT_NAME } from "./config";
 
 function money(value: number): string {
   return `₹${value.toLocaleString("en-IN")}`;
@@ -38,7 +39,7 @@ function buildExplanation(
       currency: "INR",
       reason:
         "The buyer selected these products and explicitly approved order creation after reviewing the complete order.",
-      merchant: "AgentCart Demo Store",
+      merchant: MERCHANT_NAME,
       result:
         "A Razorpay Test Mode order will be created. No payment will be completed automatically.",
     };

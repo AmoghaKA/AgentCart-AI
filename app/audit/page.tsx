@@ -142,6 +142,7 @@ function ClearAuditModal({
 
 export default function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -151,10 +152,23 @@ export default function AuditPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    setEvents(getAuditEvents());
+    let mounted = true;
+    (async () => {
+      const data = await getAuditEvents();
+      if (mounted) {
+        setEvents(data);
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, [refreshKey]);
 
-  const stats = useMemo(() => getAuditStats(), [refreshKey]);
+  const stats = useMemo(() => ({
+    total: events.length,
+    success: events.filter((e) => e.status === "success").length,
+    failed: events.filter((e) => e.status === "failed").length,
+    blocked: events.filter((e) => e.status === "blocked").length,
+  }), [events]);
 
   const filtered = useMemo(() => {
     let result = events;
@@ -180,12 +194,23 @@ export default function AuditPage() {
     return result;
   }, [events, search, categoryFilter, statusFilter, actorFilter]);
 
-  const handleClear = () => {
-    clearAuditEvents();
+  const handleClear = async () => {
+    await clearAuditEvents();
     setEvents([]);
     setClearModalOpen(false);
-    setRefreshKey((k) => k + 1);
   };
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="audit-page">
+          <div className="loading-state">
+            <p>Loading audit events from Supabase...</p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

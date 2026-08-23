@@ -6,7 +6,7 @@ type Metric = {
   change?: string;
 };
 
-const icons = ["\u20B9", "\u2197", "\u2726", "#"];
+const icons = ["₹", "↗", "✦", "#"];
 
 export function MetricCard({
   metric,

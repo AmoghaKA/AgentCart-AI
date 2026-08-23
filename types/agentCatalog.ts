@@ -1,4 +1,5 @@
 import type { Product } from "@/types/product";
+import { DEMO_MERCHANT } from "@/lib/config";
 
 export interface MerchantProfile {
   name: string;
@@ -27,5 +28,5 @@ export function toAgentReadableProduct(product: Product): AgentReadableProduct {
 }
 
 export function toAgentCatalog(products: Product[]): AgentCatalog {
-  return { merchant: { name: "AgentCart Demo Store", description: "AI-ready merchant catalog for agentic commerce.", currency: "INR" }, products: products.map(toAgentReadableProduct) };
+  return { merchant: { name: DEMO_MERCHANT.name, description: DEMO_MERCHANT.description, currency: DEMO_MERCHANT.currency }, products: products.map(toAgentReadableProduct) };
 }
