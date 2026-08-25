@@ -1,6 +1,6 @@
 import type { Product } from "@/types/product";
 
-export type RecommendationType = "Cross-sell" | "Upsell";
+export type RecommendationType = "Cross-sell" | "Upsell" | "bundle";
 export type Confidence = "High" | "Medium";
 
 export interface GrowthOpportunity {

@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.51",
+    "@ai-sdk/groq": "^4.0.31",
     "@ai-sdk/openai": "^4.0.47",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.3",

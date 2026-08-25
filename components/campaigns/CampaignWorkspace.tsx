@@ -18,6 +18,88 @@ function money(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
 }
 
+const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
+  upsell: { label: "Upsell", icon: "↗", color: "campaign-type-upsell" },
+  cross_sell: { label: "Cross-sell", icon: "⇄", color: "campaign-type-cross" },
+  discount: { label: "Discount", icon: "%", color: "campaign-type-discount" },
+  bundle: { label: "Bundle", icon: "⊞", color: "campaign-type-bundle" },
+};
+
+function CampaignCard({ campaign, onToggle, onDelete }: { campaign: Campaign; onToggle: () => void; onDelete: () => void }) {
+  const type = TYPE_META[campaign.type] || { label: campaign.type, icon: "•", color: "" };
+  const isActive = campaign.status === "active";
+  const ctr = campaign.impressions > 0 ? ((campaign.clicks / campaign.impressions) * 100).toFixed(1) : "0.0";
+  const cvr = campaign.clicks > 0 ? ((campaign.conversions / campaign.clicks) * 100).toFixed(1) : "0.0";
+
+  return (
+    <div className="campaign-result-card">
+      <div className="campaign-card-top">
+        <div className="campaign-card-type">
+          <span className={`campaign-type-icon ${type.color}`}>{type.icon}</span>
+          <div>
+            <span className="campaign-type-label">{type.label}</span>
+            <h3 className="campaign-card-name">{campaign.name}</h3>
+          </div>
+        </div>
+        <div className="campaign-card-status-row">
+          <span className={`campaign-status-pill ${isActive ? "status-active" : "status-paused"}`}>
+            <span className={`status-dot ${isActive ? "dot-active" : "dot-paused"}`} />
+            {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+          </span>
+          <span className="campaign-target-count">{campaign.target_products.length} products</span>
+        </div>
+      </div>
+
+      <div className="campaign-card-body">
+        <p className="campaign-message">{campaign.message}</p>
+
+        {campaign.discount_percent ? (
+          <div className="campaign-discount-banner">
+            <span className="discount-icon">%</span>
+            <span>{campaign.discount_percent}% discount applied</span>
+          </div>
+        ) : null}
+
+        <div className="campaign-metrics-grid">
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">Impressions</span>
+            <strong className="campaign-metric-value">{campaign.impressions.toLocaleString()}</strong>
+          </div>
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">Clicks</span>
+            <strong className="campaign-metric-value">{campaign.clicks.toLocaleString()}</strong>
+          </div>
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">Conv.</span>
+            <strong className="campaign-metric-value">{campaign.conversions.toLocaleString()}</strong>
+          </div>
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">Revenue</span>
+            <strong className="campaign-metric-value campaign-metric-revenue">{money(campaign.revenue)}</strong>
+          </div>
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">CTR</span>
+            <strong className="campaign-metric-value">{ctr}%</strong>
+          </div>
+          <div className="campaign-metric">
+            <span className="campaign-metric-label">CVR</span>
+            <strong className="campaign-metric-value">{cvr}%</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="campaign-card-actions">
+        <button className={`campaign-action-btn ${isActive ? "action-pause" : "action-activate"}`} onClick={onToggle}>
+          {isActive ? "Pause" : "Activate"}
+        </button>
+        <button className="campaign-action-btn action-delete" onClick={onDelete}>
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CampaignWorkspace() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,39 +214,17 @@ export function CampaignWorkspace() {
         <div className="growth-empty">
           <div className="growth-empty-icon">✦</div>
           <h2>No campaigns yet</h2>
-          <p>Click "Generate AI Campaigns" to let the AI analyze your catalog and create targeted marketing campaigns.</p>
+          <p>Click &quot;Generate AI Campaigns&quot; to let the AI analyze your catalog and create targeted marketing campaigns.</p>
         </div>
       ) : (
-        <div className="growth-opportunity-list">
+        <div className="campaign-results-list">
           {campaigns.map((campaign) => (
-            <div className="opportunity-card" key={campaign.id}>
-              <div className="opportunity-header">
-                <div>
-                  <span className={`confidence-badge ${campaign.status === "active" ? "confidence-high" : "confidence-low"}`}>
-                    {campaign.status.toUpperCase()}
-                  </span>
-                  <span className="recommendation-type">{campaign.type.replace("_", " ")}</span>
-                </div>
-                <span className="opportunity-revenue">+{campaign.target_products.length} products targeted</span>
-              </div>
-              <h3>{campaign.name}</h3>
-              <p>{campaign.message}</p>
-              <div className="opportunity-metrics">
-                <div><span>Impressions</span><strong>{campaign.impressions}</strong></div>
-                <div><span>Clicks</span><strong>{campaign.clicks}</strong></div>
-                <div><span>Conversions</span><strong>{campaign.conversions}</strong></div>
-                <div><span>Revenue</span><strong>{money(campaign.revenue)}</strong></div>
-                {campaign.discount_percent ? <div><span>Discount</span><strong>{campaign.discount_percent}%</strong></div> : null}
-              </div>
-              <div className="opportunity-actions">
-                <button className="secondary-button" onClick={() => toggleStatus(campaign)}>
-                  {campaign.status === "active" ? "Pause" : "Activate"}
-                </button>
-                <button className="danger-button" onClick={() => handleDelete(campaign.id)}>
-                  Delete
-                </button>
-              </div>
-            </div>
+            <CampaignCard
+              key={campaign.id}
+              campaign={campaign}
+              onToggle={() => toggleStatus(campaign)}
+              onDelete={() => handleDelete(campaign.id)}
+            />
           ))}
         </div>
       )}

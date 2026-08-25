@@ -11,9 +11,21 @@ import { OpportunityCard } from "@/components/growth/OpportunityCard";
 
 function money(value: number) { return `₹${value.toLocaleString("en-IN")}`; }
 
-function EmptyState({ emptyCatalog, onAnalyze }: { emptyCatalog: boolean; onAnalyze: () => void }) {
-  return <div className="growth-empty"><div className="growth-empty-icon">✦</div><h2>{emptyCatalog ? "No products available to analyze." : "No strong revenue opportunities found."}</h2><p>{emptyCatalog ? "Add products to your catalog before running the AI Growth Agent." : "Add complementary product categories to your catalog to help the AI identify cross-sell opportunities."}</p>{emptyCatalog ? <Link href="/catalog" className="primary-button">Go to Catalog <span>↗</span></Link> : <button className="secondary-button" onClick={onAnalyze}>Analyze Again</button>}</div>;
-}
+const CAPABILITIES = [
+  { icon: "⇄", title: "Cross-sell Detection", desc: "Identifies products customers frequently buy together and surfaces bundle opportunities." },
+  { icon: "↗", title: "Upsell Analysis", desc: "Finds premium alternatives and higher-value pairings for each product in your catalog." },
+  { icon: "⊞", title: "Bundle Intelligence", desc: "Groups complementary products into pre-built bundles that maximize average order value." },
+  { icon: "📊", title: "Revenue Projection", desc: "Estimates additional revenue from each opportunity based on catalog pricing and demand signals." },
+];
+
+const CATEGORY_ICONS: Record<string, string> = {
+  Laptops: "💻",
+  Monitors: "🖥",
+  Accessories: "🎧",
+  "Gaming Peripherals": "🎮",
+  "Audio & Video": "🔊",
+  Storage: "💾",
+};
 
 export function GrowthWorkspace() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -21,6 +33,18 @@ export function GrowthWorkspace() {
   const [opportunities, setOpportunities] = useState<GrowthOpportunity[]>([]);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const data = await loadProducts();
+      if (mounted) {
+        setProducts(data);
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
@@ -46,40 +70,22 @@ export function GrowthWorkspace() {
     setIsAnalyzing(false);
   };
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const data = await loadProducts();
-      if (mounted) {
-        setProducts(data);
-        setLoading(false);
-        try {
-          const results = await analyzeCatalog(data);
-          setOpportunities(results);
-          setHasAnalyzed(true);
-          await logAuditEvent({
-            actor: "agent",
-            action: "AI Growth analysis executed",
-            category: "growth",
-            status: results.length > 0 ? "success" : "blocked",
-            description: `AI analyzed ${data.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`,
-            details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No opportunities found",
-            amount: results.reduce((sum, r) => sum + r.additionalRevenue, 0),
-            currency: "INR",
-          });
-        } catch (error) {
-          console.error("AI analysis failed:", error);
-        }
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
   const totalAdditionalRevenue = useMemo(() => opportunities.reduce((total, o) => total + o.additionalRevenue, 0), [opportunities]);
-  const averageImpact = opportunities.length ? Math.round(totalAdditionalRevenue / opportunities.length) : 0;
+  const categoryBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach((p) => map.set(p.category, (map.get(p.category) || 0) + 1));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [products]);
 
   if (loading) {
-    return <div className="growth-page"><div className="loading-state"><p>Loading catalog from Supabase...</p></div></div>;
+    return (
+      <div className="growth-page">
+        <div className="growth-loading-state">
+          <div className="growth-loading-spinner" />
+          <p>Loading catalog data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -95,22 +101,117 @@ export function GrowthWorkspace() {
           {isAnalyzing ? "AI is analyzing..." : "Run AI Analysis"}
         </button>
       </header>
+
       {isAnalyzing && (
-        <div className="analysis-progress">
-          <span className="status-dot" /> AI is analyzing product relationships <i /> Identifying cross-sell & upsell opportunities <i /> Calculating revenue impact
+        <div className="growth-analyzing-banner">
+          <div className="analyzing-pulse" />
+          <div className="analyzing-text">
+            <strong>AI is analyzing your catalog</strong>
+            <span>Scanning product relationships, identifying cross-sell & upsell opportunities, calculating revenue impact...</span>
+          </div>
         </div>
       )}
+
+      {!hasAnalyzed && !isAnalyzing && (
+        <>
+          <section className="growth-hero">
+            <div className="growth-hero-content">
+              <div className="growth-hero-badge">✦ AI-POWERED</div>
+              <h2>Discover hidden revenue in your catalog</h2>
+              <p>The Growth Agent analyzes product relationships, customer buying patterns, and catalog structure to find untapped revenue opportunities you might be missing.</p>
+              <button className="primary-button analyze-button" onClick={runAnalysis}>
+                <span className="spark-button-icon">✦</span> Run AI Analysis
+              </button>
+            </div>
+            <div className="growth-hero-stats">
+              {products.length > 0 && (
+                <div className="growth-hero-stat-card">
+                  <span className="growth-hero-stat-icon">📦</span>
+                  <strong>{products.length}</strong>
+                  <span>Products in catalog</span>
+                </div>
+              )}
+              {categoryBreakdown.length > 0 && (
+                <div className="growth-hero-stat-card">
+                  <span className="growth-hero-stat-icon">📂</span>
+                  <strong>{categoryBreakdown.length}</strong>
+                  <span>Categories detected</span>
+                </div>
+              )}
+              <div className="growth-hero-stat-card">
+                <span className="growth-hero-stat-icon">✦</span>
+                <strong>AI</strong>
+                <span>Analysis engine</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="growth-capabilities">
+            <div className="growth-capabilities-header">
+              <p className="eyebrow">HOW IT WORKS</p>
+              <h3>What the AI analyzes</h3>
+            </div>
+            <div className="growth-capabilities-grid">
+              {CAPABILITIES.map((cap) => (
+                <div className="growth-capability-card" key={cap.title}>
+                  <span className="growth-capability-icon">{cap.icon}</span>
+                  <h4>{cap.title}</h4>
+                  <p>{cap.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {categoryBreakdown.length > 0 && (
+            <section className="growth-catalog-preview">
+              <div className="growth-capabilities-header">
+                <p className="eyebrow">CATALOG SNAPSHOT</p>
+                <h3>Products ready for analysis</h3>
+              </div>
+              <div className="growth-category-chips">
+                {categoryBreakdown.map(([cat, count]) => (
+                  <span className="growth-category-chip" key={cat}>
+                    <span className="chip-icon">{CATEGORY_ICONS[cat] || "📦"}</span>
+                    <span className="chip-label">{cat}</span>
+                    <span className="chip-count">{count}</span>
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
       {hasAnalyzed && (
         <>
           <section className="growth-summary">
-            <div className="growth-summary-card"><span className="summary-icon summary-icon-blue">⌘</span><div><strong>{products.length}</strong><span>Products analyzed</span></div></div>
-            <div className="growth-summary-card"><span className="summary-icon summary-icon-mint">✦</span><div><strong>{opportunities.length}</strong><span>Growth opportunities</span></div></div>
-            <div className="growth-summary-card summary-revenue"><span className="summary-icon summary-icon-amber">↗</span><div><strong>+{money(totalAdditionalRevenue)}</strong><span>Potential revenue identified</span></div></div>
-            <div className="growth-summary-card"><span className="summary-icon summary-icon-purple">◒</span><div><strong>+{money(averageImpact)}</strong><span>Average order value impact</span></div></div>
+            <div className="growth-summary-card">
+              <span className="summary-icon summary-icon-blue">⌘</span>
+              <div>
+                <strong>{products.length}</strong>
+                <span>Products scanned</span>
+              </div>
+            </div>
+            <div className="growth-summary-card">
+              <span className="summary-icon summary-icon-mint">✦</span>
+              <div>
+                <strong>{opportunities.length}</strong>
+                <span>Bundles suggested</span>
+              </div>
+            </div>
+            <div className="growth-summary-card summary-revenue">
+              <span className="summary-icon summary-icon-amber">↗</span>
+              <div>
+                <strong>+{money(totalAdditionalRevenue)}</strong>
+                <span>Extra revenue potential</span>
+              </div>
+            </div>
           </section>
           <section className="opportunities-heading">
-            <div><p className="eyebrow">AI RECOMMENDATIONS</p><h2>Revenue opportunities <span>{opportunities.length}</span></h2></div>
-            <p>AI-powered recommendations based on catalog analysis and product relationships.</p>
+            <div>
+              <p className="eyebrow">AI SUGGESTIONS</p>
+              <h2>Products that sell better together <span>{opportunities.length}</span></h2>
+            </div>
           </section>
           {opportunities.length ? (
             <div className="growth-opportunity-list">
@@ -119,7 +220,15 @@ export function GrowthWorkspace() {
               ))}
             </div>
           ) : (
-            <EmptyState emptyCatalog={products.length === 0} onAnalyze={runAnalysis} />
+            <div className="growth-empty">
+              <div className="growth-empty-icon">✦</div>
+              <h2>No strong revenue opportunities found</h2>
+              <p>Add complementary product categories to your catalog to help the AI identify cross-sell and upsell opportunities.</p>
+              <div className="growth-empty-actions">
+                <Link href="/catalog" className="primary-button">Go to Catalog <span>↗</span></Link>
+                <button className="secondary-button" onClick={runAnalysis}>Analyze Again</button>
+              </div>
+            </div>
           )}
         </>
       )}

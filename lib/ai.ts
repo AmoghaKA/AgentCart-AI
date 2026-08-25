@@ -1,10 +1,22 @@
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { generateText, streamText } from "ai";
 import type { Product } from "@/types/product";
 import type { AgentReadableProduct } from "@/types/agentCatalog";
 
-const MODEL = "gemini-2.0-flash";
-const HAS_AI = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+const GROQ_KEY = process.env.GROQ_API_KEY || "";
+const GEMINI_KEY = process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || "";
+
+function aiModel() {
+  if (GROQ_KEY && GROQ_KEY !== "gsk_your_groq_key_here") {
+    const groq = createGroq({ apiKey: GROQ_KEY });
+    return groq("qwen/qwen3.6-27b");
+  }
+  const google = createGoogleGenerativeAI({ apiKey: GEMINI_KEY });
+  return google("gemini-3.6-flash");
+}
+
+const HAS_AI = Boolean(GROQ_KEY && GROQ_KEY !== "gsk_your_groq_key_here") || Boolean(GEMINI_KEY);
 
 function catalogContext(products: Product[] | AgentReadableProduct[]) {
   return products
@@ -32,7 +44,7 @@ export async function analyzeGrowthOpportunities(
   try {
     const catalog = catalogContext(products);
     const { text } = await generateText({
-      model: google(MODEL),
+      model: aiModel(),
       prompt: `You are a revenue growth analyst for an e-commerce merchant. Analyze the following product catalog and identify cross-sell and upsell opportunities.
 
 CATALOG:
@@ -140,7 +152,7 @@ export async function aiSearchCatalog(
       .join("\n");
 
     const { text } = await generateText({
-      model: google(MODEL),
+      model: aiModel(),
       prompt: `You are an AI shopping assistant helping a buyer find products from a merchant catalog.
 
 CATALOG:
@@ -241,7 +253,7 @@ export async function generateCheckoutMessage(
       .join(", ");
 
     const { text } = await generateText({
-      model: google(MODEL),
+      model: aiModel(),
       prompt: `You are AgentCart's commerce agent guiding a buyer through checkout.
 
 CONTEXT: ${context}
@@ -333,8 +345,43 @@ When the buyer wants to purchase, respond with a JSON action:
 
 Otherwise respond normally with text.`;
 
+  if (!HAS_AI) {
+    const last = messages[messages.length - 1];
+    const userMsg = last?.content?.toLowerCase() || "";
+    let reply = "I can help you find products. What are you looking for?";
+
+    if (userMsg.includes("buy") || userMsg.includes("cart") || userMsg.includes("purchase")) {
+      const inStock = catalog.filter((p) => p.stock > 0).slice(0, 3);
+      if (inStock.length > 0) {
+        const list = inStock.map((p) => `${p.name} (₹${p.price.toLocaleString("en-IN")})`).join(", ");
+        reply = `I recommend these products: ${list}. Would you like to add any to your cart?`;
+      }
+    } else if (userMsg.includes("laptop") || userMsg.includes("computer")) {
+      const laptops = catalog.filter((p) => p.category === "Laptops" && p.stock > 0);
+      if (laptops.length > 0) {
+        reply = `We have ${laptops.length} laptop${laptops.length === 1 ? "" : "s"} available: ${laptops.map((p) => `${p.name} (₹${p.price.toLocaleString("en-IN")})`).join(", ")}.`;
+      }
+    } else {
+      const inStock = catalog.filter((p) => p.stock > 0);
+      if (inStock.length > 0) {
+        reply = `We have ${inStock.length} products available. Tell me what you need — budget, category, or use case — and I'll find the best matches.`;
+      } else {
+        reply = "The catalog is currently empty. Please check back later.";
+      }
+    }
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(reply));
+        controller.close();
+      },
+    });
+    return stream;
+  }
+
   const aiResult = streamText({
-    model: google(MODEL),
+    model: aiModel(),
     system: systemPrompt,
     messages,
   });

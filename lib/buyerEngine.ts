@@ -1,5 +1,4 @@
 import type { AgentReadableProduct } from "@/types/agentCatalog";
-import { aiSearchCatalog, type AIProductMatch } from "@/lib/ai";
 
 export interface BuyerIntent {
   keywords: string[];
@@ -53,8 +52,34 @@ export function parseBuyerIntent(request: string): BuyerIntent {
     category: category ? categoryWords[category] : undefined,
     useCase,
     maxPrice: parseBudget(request),
-    cheapest:
-      normalized.includes("cheapest") || normalized.includes("lowest price"),
+    cheapest: normalized.includes("cheapest") || normalized.includes("lowest price"),
+  };
+}
+
+function fallbackSearch(products: AgentReadableProduct[], request: string): { matches: BuyerMatch[]; response: string } {
+  const normalized = request.toLowerCase();
+  const maxPrice = parseBudget(request);
+  const matches: BuyerMatch[] = products
+    .filter((p) => p.available && p.stock > 0)
+    .map((p) => {
+      const text = `${p.name} ${p.description} ${p.category}`.toLowerCase();
+      let score = 0;
+      const words = normalized.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+      score += words.filter((w) => text.includes(w)).length * 10;
+      if (maxPrice && p.price <= maxPrice) score += 20;
+      if (maxPrice && p.price > maxPrice) score -= 50;
+      return { product: p, score: Math.max(0, score), reason: `Matches your search for "${request}".` };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ score: _, ...rest }) => rest);
+
+  return {
+    matches,
+    response: matches.length > 0
+      ? `I found ${matches.length} product${matches.length === 1 ? "" : "s"} matching your request.`
+      : `I couldn't find products matching "${request}". Try different keywords.`,
   };
 }
 
@@ -63,32 +88,50 @@ export async function searchBuyerCatalog(
   request: string
 ): Promise<BuyerSearchResult> {
   const intent = parseBuyerIntent(request);
-  const aiResult = await aiSearchCatalog(products, request);
 
-  const matches: BuyerMatch[] = aiResult.matches.map((m: AIProductMatch) => ({
-    product: m.product,
-    reason: m.reason,
-  }));
+  if (!products.length) {
+    return { intent, matches: [], budgetExceeded: false, aiResponse: "The catalog is empty." };
+  }
 
-  const closest = intent.maxPrice
-    ? products
-        .filter((p) => p.available)
-        .sort(
-          (a, b) =>
-            Math.abs(a.price - intent.maxPrice!) -
-            Math.abs(b.price - intent.maxPrice!)
-        )[0]
-    : undefined;
+  try {
+    const res = await fetch("/api/ai/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products, query: request }),
+    });
 
-  return {
-    intent,
-    matches,
-    closestMatch: closest
-      ? { product: closest, reason: `Closest to your ₹${intent.maxPrice!.toLocaleString("en-IN")} budget.` }
-      : undefined,
-    budgetExceeded: Boolean(
-      intent.maxPrice && matches.length === 0 && products.some((p) => p.price > intent.maxPrice!)
-    ),
-    aiResponse: aiResult.response,
-  };
+    if (!res.ok) throw new Error(`API returned ${res.status}`);
+
+    const data = await res.json();
+
+    if (data.fallback || !data.matches) {
+      const fb = fallbackSearch(products, request);
+      return { intent, ...fb, budgetExceeded: false, aiResponse: fb.response };
+    }
+
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    const matches: BuyerMatch[] = (data.matches || [])
+      .map((m: any) => {
+        const product = productMap.get(m.productId);
+        if (!product) return null;
+        return { product, reason: m.reason };
+      })
+      .filter(Boolean);
+
+    const closest = intent.maxPrice
+      ? products.filter((p) => p.available).sort((a, b) => Math.abs(a.price - intent.maxPrice!) - Math.abs(b.price - intent.maxPrice!))[0]
+      : undefined;
+
+    return {
+      intent,
+      matches,
+      closestMatch: closest ? { product: closest, reason: `Closest to your ₹${intent.maxPrice!.toLocaleString("en-IN")} budget.` } : undefined,
+      budgetExceeded: Boolean(intent.maxPrice && matches.length === 0 && products.some((p) => p.price > intent.maxPrice!)),
+      aiResponse: data.response || "Here are the best matches I found.",
+    };
+  } catch (error) {
+    console.error("AI catalog search failed, using fallback:", error);
+    const fb = fallbackSearch(products, request);
+    return { intent, ...fb, budgetExceeded: false, aiResponse: fb.response };
+  }
 }

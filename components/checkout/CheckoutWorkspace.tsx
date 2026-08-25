@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { analyzeCatalog } from "@/lib/growthEngine";
-import { generateCheckoutMessage } from "@/lib/ai";
 import { loadProducts } from "@/lib/catalogStorage";
 import {
   addCheckoutActivity,
@@ -32,6 +31,21 @@ import { PaymentFailure } from "./PaymentFailure";
 function money(value: number) {
   return `\u20B9${value.toLocaleString("en-IN")}`;
 }
+
+function getDefaultMessage(items: { name: string; quantity: number; price: number }[], total: number, phase: string): string {
+  const count = items.reduce((s, i) => s + i.quantity, 0);
+  switch (phase) {
+    case "greeting": return `I've reviewed your purchase intent. You have ${count} item${count === 1 ? "" : "s"} totaling ₹${total.toLocaleString("en-IN")}.`;
+    case "review": return `Your order total is ₹${total.toLocaleString("en-IN")}. I'll verify every item against the merchant catalog.`;
+    case "safety": return `All safety checks passed — prices verified, stock confirmed, transaction limits respected.`;
+    case "approval": return `Your order is ready. Please approve to create a Razorpay test-mode order for ₹${total.toLocaleString("en-IN")}.`;
+    case "order_created": return `A Razorpay test order has been created. I can open the secure payment interface.`;
+    case "payment": return `Payment interface is ready. Please review and complete the secure Razorpay test payment.`;
+    case "complete": return `Payment verified successfully! Your transaction of ₹${total.toLocaleString("en-IN")} is complete.`;
+    default: return `How can I help with your checkout?`;
+  }
+}
+
 function itemTotal(item: CheckoutItem, products: Product[]) {
   return (
     (products.find((product) => product.id === item.productId)?.price ??
@@ -86,14 +100,30 @@ function Conversation({
   useEffect(() => {
     const itemDetails = session.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice }));
     (async () => {
-      const [greeting, review, safety, approval, orderCreated] = await Promise.all([
-        generateCheckoutMessage("", itemDetails, total, "greeting"),
-        generateCheckoutMessage("", itemDetails, total, "review"),
-        generateCheckoutMessage("", itemDetails, total, "safety"),
-        generateCheckoutMessage("", itemDetails, total, "approval"),
-        generateCheckoutMessage("", itemDetails, total, "order_created"),
-      ]);
-      setMessages({ greeting, review, safety, approval, orderCreated });
+      const phases = ["greeting", "review", "safety", "approval", "order_created"] as const;
+      const results = await Promise.all(
+        phases.map(async (phase) => {
+          try {
+            const res = await fetch("/api/ai/checkout", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items: itemDetails, total, phase }),
+            });
+            if (!res.ok) throw new Error("API failed");
+            const data = await res.json();
+            return data.message as string;
+          } catch {
+            return getDefaultMessage(itemDetails, total, phase);
+          }
+        })
+      );
+      setMessages({
+        greeting: results[0],
+        review: results[1],
+        safety: results[2],
+        approval: results[3],
+        orderCreated: results[4],
+      });
     })();
   }, [session.items.length, total, session.items]);
 
