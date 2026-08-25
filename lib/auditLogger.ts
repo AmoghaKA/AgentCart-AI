@@ -6,7 +6,7 @@ import type {
   AuditStatus,
 } from "@/types/audit";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getMerchantIdForUser } from "@/lib/auth";
 
 interface AuditEventRow {
   id: string;
@@ -44,8 +44,9 @@ function q(): any {
 
 export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
   try {
-    const { data, error } = await q().from("audit_events").insert({
-      merchant_id: DEMO_MERCHANT_ID,
+    const merchantId = await getMerchantIdForUser();
+
+    const insertData: any = {
       actor: input.actor,
       action: input.action,
       category: input.category,
@@ -55,7 +56,13 @@ export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent>
       amount: input.amount ?? null,
       currency: input.currency || null,
       reference_id: input.referenceId || null,
-    }).select().single();
+    };
+
+    if (merchantId) {
+      insertData.merchant_id = merchantId;
+    }
+
+    const { data, error } = await q().from("audit_events").insert(insertData).select().single();
 
     if (error) {
       console.error("Failed to log audit event to Supabase:", error.message);
@@ -79,7 +86,12 @@ export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent>
 
 export async function getAuditEvents(): Promise<AuditEvent[]> {
   try {
-    const { data, error } = await q().from("audit_events").select("*").order("created_at", { ascending: false });
+    const merchantId = await getMerchantIdForUser();
+    let query = q().from("audit_events").select("*");
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) {
       console.error("Failed to fetch audit events:", error.message);
       return [];
@@ -103,7 +115,12 @@ export async function getAuditEventById(id: string): Promise<AuditEvent | null> 
 
 export async function getAuditEventsByCategory(category: AuditCategory): Promise<AuditEvent[]> {
   try {
-    const { data, error } = await q().from("audit_events").select("*").eq("category", category).order("created_at", { ascending: false });
+    const merchantId = await getMerchantIdForUser();
+    let query = q().from("audit_events").select("*").eq("category", category);
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) return [];
     return (data || []).map(rowToEvent);
   } catch {
@@ -113,7 +130,12 @@ export async function getAuditEventsByCategory(category: AuditCategory): Promise
 
 export async function getAuditEventsByStatus(status: AuditStatus): Promise<AuditEvent[]> {
   try {
-    const { data, error } = await q().from("audit_events").select("*").eq("status", status).order("created_at", { ascending: false });
+    const merchantId = await getMerchantIdForUser();
+    let query = q().from("audit_events").select("*").eq("status", status);
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) return [];
     return (data || []).map(rowToEvent);
   } catch {
@@ -123,7 +145,9 @@ export async function getAuditEventsByStatus(status: AuditStatus): Promise<Audit
 
 export async function clearAuditEvents(): Promise<void> {
   try {
-    const { error } = await q().from("audit_events").delete().eq("merchant_id", DEMO_MERCHANT_ID);
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) return;
+    const { error } = await q().from("audit_events").delete().eq("merchant_id", merchantId);
     if (error) {
       console.error("Failed to clear audit events:", error.message);
     }
@@ -139,7 +163,12 @@ export async function getAuditStats(): Promise<{
   blocked: number;
 }> {
   try {
-    const { data, error } = await q().from("audit_events").select("status").eq("merchant_id", DEMO_MERCHANT_ID);
+    const merchantId = await getMerchantIdForUser();
+    let query = q().from("audit_events").select("status");
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data, error } = await query;
     if (error || !data) {
       return { total: 0, success: 0, failed: 0, blocked: 0 };
     }

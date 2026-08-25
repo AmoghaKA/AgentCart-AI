@@ -7,7 +7,7 @@ import {
   validateAmountBoundary,
 } from "@/lib/safety";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getSupabaseServerClientWithSession } from "@/lib/supabase/server-session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -58,16 +58,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get the merchant for the current user
+    const sessionSupabase = await getSupabaseServerClientWithSession();
+    const { data: { user } } = await sessionSupabase.auth.getUser();
+
+    let merchantId: string | null = null;
+    if (user) {
+      const { data: merchant } = await sessionSupabase
+        .from("merchants")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+      merchantId = merchant?.id || null;
+    }
+
     // ── SERVER-SIDE VALIDATION FROM SUPABASE ──
     const supabase = getSupabaseServerClient();
 
     // 1. Load the order from Supabase
-    const { data: order, error: orderError } = await (supabase
+    let orderQuery = supabase
       .from("orders" as any)
       .select("*")
-      .eq("id", checkoutId)
-      .eq("merchant_id", DEMO_MERCHANT_ID)
-      .single() as any);
+      .eq("id", checkoutId);
+
+    if (merchantId) {
+      orderQuery = orderQuery.eq("merchant_id", merchantId);
+    }
+
+    const { data: order, error: orderError } = await orderQuery.single() as any;
 
     if (orderError || !order) {
       return NextResponse.json(

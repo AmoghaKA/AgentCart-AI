@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getSupabaseServerClientWithSession } from "@/lib/supabase/server-session";
 
 export async function GET() {
   try {
-    const supabase = getSupabaseServerClient();
-    const { data, error } = await supabase
+    const supabase = await getSupabaseServerClientWithSession();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({
+        store_name: "", store_description: "", currency: "INR",
+        public_catalog: true, auto_respond: true, show_pricing: true,
+        cross_sell: true, safety_checks: true, ai_analysis: true, auto_approve: false,
+      });
+    }
+
+    const { data } = await supabase
       .from("merchants")
       .select("*")
-      .eq("id", DEMO_MERCHANT_ID)
+      .eq("user_id", user.id)
       .single();
 
-    if (error) {
-      console.error("[merchant-settings] GET error:", error.message);
+    if (!data) {
       return NextResponse.json({
-        store_name: "AgentCart Demo Store", store_description: "", currency: "INR",
+        store_name: "", store_description: "", currency: "INR",
         public_catalog: true, auto_respond: true, show_pricing: true,
         cross_sell: true, safety_checks: true, ai_analysis: true, auto_approve: false,
       });
@@ -22,7 +31,7 @@ export async function GET() {
 
     return NextResponse.json({
       store_name: data.name ?? "",
-      store_description: data.store_description ?? "",
+      store_description: data.store_description ?? data.description ?? "",
       currency: data.currency ?? "INR",
       public_catalog: data.public_catalog ?? true,
       auto_respond: data.auto_respond ?? true,
@@ -35,7 +44,7 @@ export async function GET() {
   } catch (err: any) {
     console.error("[merchant-settings] GET exception:", err?.message);
     return NextResponse.json({
-      store_name: "AgentCart Demo Store", store_description: "", currency: "INR",
+      store_name: "", store_description: "", currency: "INR",
       public_catalog: true, auto_respond: true, show_pricing: true,
       cross_sell: true, safety_checks: true, ai_analysis: true, auto_approve: false,
     });
@@ -45,12 +54,28 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClientWithSession();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get the merchant for this user
+    const { data: merchant } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!merchant) {
+      return NextResponse.json({ error: "Merchant not found" }, { status: 404 });
+    }
 
     const { error } = await supabase
       .from("merchants")
       .update({
-        name: body.store_name ?? "AgentCart Demo Store",
+        name: body.store_name ?? "",
         description: body.store_description ?? "",
         store_description: body.store_description ?? "",
         currency: body.currency ?? "INR",
@@ -63,7 +88,7 @@ export async function PUT(req: NextRequest) {
         auto_approve: body.auto_approve ?? false,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", DEMO_MERCHANT_ID);
+      .eq("id", merchant.id);
 
     if (error) {
       console.error("[merchant-settings] PUT error:", error.message);

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { CheckoutItem, CheckoutSession } from "@/types/checkout";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getMerchantIdForUser } from "@/lib/auth";
 
 function generateUUID(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -51,7 +51,10 @@ function mapCheckoutToOrderStatus(status: string): string {
 
 export async function loadCheckoutSession(): Promise<CheckoutSession | null> {
   try {
-    const { data: order, error: orderError } = await q().from("orders").select("*").eq("merchant_id", DEMO_MERCHANT_ID).not("status", "in", "(payment_verified,cancelled)").order("created_at", { ascending: false }).limit(1).single();
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) return null;
+
+    const { data: order, error: orderError } = await q().from("orders").select("*").eq("merchant_id", merchantId).not("status", "in", "(payment_verified,cancelled)").order("created_at", { ascending: false }).limit(1).single();
     if (orderError || !order) return null;
 
     const { data: items } = await q().from("order_items").select("*").eq("order_id", order.id);
@@ -97,11 +100,14 @@ export async function loadCheckoutSession(): Promise<CheckoutSession | null> {
 
 export async function saveCheckoutSession(session: CheckoutSession): Promise<void> {
   try {
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) return;
+
     const orderStatus = mapCheckoutToOrderStatus(session.status);
 
     await q().from("orders").upsert({
       id: session.id,
-      merchant_id: DEMO_MERCHANT_ID,
+      merchant_id: merchantId,
       status: orderStatus,
       currency: "INR",
       subtotal: session.subtotal,

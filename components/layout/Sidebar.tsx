@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { merchantNavigation, buyerNavigation } from "@/lib/mockData";
+import { getCurrentUser, signOut } from "@/lib/auth";
+import type { AuthUser } from "@/lib/auth";
 
 function NavIcon({ name }: { name: string }) {
   const common = "h-[17px] w-[17px]";
@@ -56,6 +59,37 @@ function NavIcon({ name }: { name: string }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [storeName, setStoreName] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      if (currentUser) {
+        const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase
+          .from("merchants")
+          .select("name")
+          .eq("user_id", currentUser.id)
+          .single();
+        if (data) setStoreName(data.name);
+      }
+    })();
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/auth/login");
+    router.refresh();
+  };
+
+  const userInitial = storeName
+    ? storeName.charAt(0).toUpperCase()
+    : user?.email?.charAt(0).toUpperCase() || "U";
+
   return (
     <aside className="sidebar-shell">
       <div className="brand-lockup">
@@ -111,14 +145,31 @@ export function Sidebar() {
 
       <div className="sidebar-bottom">
         <Link href="/settings" className="merchant-console-footer">
-          <div className="merchant-console-avatar">MC</div>
+          <div className="merchant-console-avatar">{userInitial}</div>
           <div className="merchant-console-info">
-            <span className="merchant-console-name">Merchant Console</span>
+            <span className="merchant-console-name">
+              {storeName || "Merchant Console"}
+            </span>
+            {user && (
+              <span className="merchant-console-email">{user.email}</span>
+            )}
           </div>
           <svg className="merchant-console-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M6 4l4 4-4 4" />
           </svg>
         </Link>
+        <button
+          className="sidebar-signout-btn"
+          onClick={handleSignOut}
+          title="Sign out"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M6 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3" />
+            <path d="M11 11l3-3-3-3" />
+            <path d="M14 8H6" />
+          </svg>
+          Sign out
+        </button>
       </div>
     </aside>
   );

@@ -89,6 +89,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     (async () => {
+      // Auto-create merchant if user doesn't have one yet
+      const { getMerchantIdForUser } = await import("@/lib/auth");
+      let merchantId = await getMerchantIdForUser();
+      if (!merchantId) {
+        const { createMerchantForUser } = await import("@/lib/auth");
+        await createMerchantForUser();
+      }
+
       const [events, dashboardMetrics] = await Promise.all([
         getAuditEvents(),
         getDashboardMetrics(),

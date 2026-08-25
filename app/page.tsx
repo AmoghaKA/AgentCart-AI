@@ -35,8 +35,8 @@ export default function LandingPage() {
           </div>
 
           <div className="lp-nav-right">
-            <Link href="/dashboard" className="lp-btn lp-btn--primary lp-btn--sm">
-              Open Dashboard
+            <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--sm">
+              Sign In
             </Link>
           </div>
 
@@ -54,7 +54,7 @@ export default function LandingPage() {
             <button onClick={() => scrollTo("product")}>Product</button>
             <button onClick={() => scrollTo("how-it-works")}>How It Works</button>
             <button onClick={() => scrollTo("safety")}>Safety</button>
-            <Link href="/dashboard" className="lp-btn lp-btn--primary">Open Dashboard</Link>
+            <Link href="/auth/login" className="lp-btn lp-btn--primary">Open Dashboard</Link>
           </div>
         )}
       </nav>
@@ -72,7 +72,7 @@ export default function LandingPage() {
             transactable by AI buyers.
           </p>
           <div className="lp-hero-ctas">
-            <Link href="/dashboard" className="lp-btn lp-btn--primary lp-btn--lg">
+            <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--lg">
               Open AgentCart AI <span className="lp-arrow">→</span>
             </Link>
             <button onClick={() => scrollTo("how-it-works")} className="lp-btn lp-btn--ghost lp-btn--lg">
@@ -504,7 +504,7 @@ export default function LandingPage() {
             from your merchant.
           </p>
           <div className="lp-cta-actions">
-            <Link href="/dashboard" className="lp-btn lp-btn--primary lp-btn--lg">
+            <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--lg">
               Open AgentCart AI <span className="lp-arrow">→</span>
             </Link>
           </div>

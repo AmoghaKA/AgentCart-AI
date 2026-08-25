@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getMerchantIdForUser } from "@/lib/auth";
 
 function q(): any {
   return getSupabaseBrowserClient();
@@ -19,11 +19,25 @@ export interface DashboardMetrics {
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   try {
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) {
+      return {
+        totalRevenue: "\u20B90",
+        totalRevenueNum: 0,
+        aiInfluencedRevenue: "\u20B90",
+        aiInfluencedRevenueNum: 0,
+        potentialUpsell: "\u20B90",
+        potentialUpsellNum: 0,
+        totalOrders: 0,
+        totalProducts: 0,
+      };
+    }
+
     // Query real orders for total revenue and order count
     const { data: orders } = await q()
       .from("orders")
       .select("total, status")
-      .eq("merchant_id", DEMO_MERCHANT_ID) as any;
+      .eq("merchant_id", merchantId) as any;
 
     const completedOrders = (orders || []).filter(
       (o: any) => o.status === "payment_verified"
@@ -38,13 +52,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     const { count: totalProducts } = await q()
       .from("products")
       .select("id", { count: "exact", head: true })
-      .eq("merchant_id", DEMO_MERCHANT_ID) as any;
+      .eq("merchant_id", merchantId) as any;
 
     // Query successful payment events for AI-influenced revenue
     const { data: paymentEvents } = await q()
       .from("audit_events")
       .select("amount")
-      .eq("merchant_id", DEMO_MERCHANT_ID)
+      .eq("merchant_id", merchantId)
       .eq("category", "payment")
       .eq("status", "success") as any;
 
@@ -57,7 +71,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     const { data: growthEvents } = await q()
       .from("audit_events")
       .select("amount")
-      .eq("merchant_id", DEMO_MERCHANT_ID)
+      .eq("merchant_id", merchantId)
       .eq("category", "growth")
       .eq("status", "success") as any;
 
@@ -99,10 +113,14 @@ export async function getRecentAuditActivity(limit = 4): Promise<{
   icon: string;
 }[]> {
   try {
-    const { data: events } = await q()
+    const merchantId = await getMerchantIdForUser();
+    let query = q()
       .from("audit_events")
-      .select("action, description, status, created_at")
-      .eq("merchant_id", DEMO_MERCHANT_ID)
+      .select("action, description, status, created_at");
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data: events } = await query
       .order("created_at", { ascending: false })
       .limit(limit) as any;
 
@@ -125,12 +143,16 @@ export async function getTopGrowthOpportunity(): Promise<{
   additionalRevenue: number;
 } | null> {
   try {
-    const { data: events } = await q()
+    const merchantId = await getMerchantIdForUser();
+    let query = q()
       .from("audit_events")
       .select("description, details, amount")
-      .eq("merchant_id", DEMO_MERCHANT_ID)
       .eq("category", "growth")
-      .eq("status", "success")
+      .eq("status", "success");
+    if (merchantId) {
+      query = query.eq("merchant_id", merchantId);
+    }
+    const { data: events } = await query
       .order("created_at", { ascending: false })
       .limit(1) as any;
 

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Product } from "@/types/product";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getMerchantIdForUser } from "@/lib/auth";
 
 interface ProductRow {
   id: string;
@@ -35,7 +35,10 @@ function q(): any {
 
 export async function loadProducts(): Promise<Product[]> {
   try {
-    const { data, error } = await q().from("products").select("*").eq("merchant_id", DEMO_MERCHANT_ID).order("created_at", { ascending: true });
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) return [];
+
+    const { data, error } = await q().from("products").select("*").eq("merchant_id", merchantId).order("created_at", { ascending: true });
     if (error) {
       console.error("Failed to load products from Supabase:", error.message);
       return [];
@@ -49,9 +52,12 @@ export async function loadProducts(): Promise<Product[]> {
 
 export async function addProduct(product: Product): Promise<Product | null> {
   try {
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) return null;
+
     const { data, error } = await q().from("products").insert({
       id: product.id,
-      merchant_id: DEMO_MERCHANT_ID,
+      merchant_id: merchantId,
       name: product.name,
       description: product.description,
       category: product.category,
@@ -121,7 +127,9 @@ export async function getProductById(id: string): Promise<Product | null> {
 export async function loadProductsServer(): Promise<Product[]> {
   const { getSupabaseServerClient } = await import("@/lib/supabase/server");
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase.from("products").select("*").eq("merchant_id", DEMO_MERCHANT_ID).order("created_at", { ascending: true }) as any;
+  // Server-side uses service role, so we need to get merchant from context
+  // For now, return all products (API routes should filter by merchant)
+  const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: true }) as any;
   if (error) {
     console.error("Failed to load products (server):", error.message);
     return [];

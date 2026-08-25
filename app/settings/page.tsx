@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEMO_MERCHANT_ID } from "@/lib/config";
+import { getCurrentUser } from "@/lib/auth";
 
 interface MerchantData {
   id: string;
@@ -46,11 +46,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     (async () => {
+      const user = await getCurrentUser();
+      if (!user) return;
+
       const supabase = getSupabaseBrowserClient();
       const { data } = await supabase
         .from("merchants")
         .select("*")
-        .eq("id", DEMO_MERCHANT_ID)
+        .eq("user_id", user.id)
         .single();
       if (data) setMerchant(data);
 
