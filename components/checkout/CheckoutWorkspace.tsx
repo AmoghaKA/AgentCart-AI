@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { analyzeCatalog } from "@/lib/growthEngine";
+import { generateCheckoutMessage } from "@/lib/ai";
 import { loadProducts } from "@/lib/catalogStorage";
 import {
   addCheckoutActivity,
@@ -74,10 +75,32 @@ function Conversation({
   onAdd: () => void;
   onDecline: () => void;
 }) {
+  const [messages, setMessages] = useState<{ greeting: string; review: string; safety: string; approval: string; orderCreated: string }>({
+    greeting: `I've reviewed your purchase intent. You have ${session.items.length} item${session.items.length === 1 ? "" : "s"}.`,
+    review: `Your order total is ₹${total.toLocaleString("en-IN")}. I'll verify every item against the merchant catalog.`,
+    safety: "All safety checks passed — prices verified, stock confirmed, transaction limits respected.",
+    approval: `Your order is ready. Please approve to create a Razorpay test-mode order for ₹${total.toLocaleString("en-IN")}.`,
+    orderCreated: "A Razorpay test order has been created. I can open the secure payment interface, but I will not do so automatically.",
+  });
+
+  useEffect(() => {
+    const itemDetails = session.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice }));
+    (async () => {
+      const [greeting, review, safety, approval, orderCreated] = await Promise.all([
+        generateCheckoutMessage("", itemDetails, total, "greeting"),
+        generateCheckoutMessage("", itemDetails, total, "review"),
+        generateCheckoutMessage("", itemDetails, total, "safety"),
+        generateCheckoutMessage("", itemDetails, total, "approval"),
+        generateCheckoutMessage("", itemDetails, total, "order_created"),
+      ]);
+      setMessages({ greeting, review, safety, approval, orderCreated });
+    })();
+  }, [session.items.length, total, session.items]);
+
   return (
     <section className="checkout-conversation">
       <div className="conversation-heading">
-        <div className="agent-avatar">{"\u2726"}</div>
+        <div className="agent-avatar">✦</div>
         <div>
           <p className="eyebrow">AGENTCART COMMERCE AGENT</p>
           <h2>Conversational checkout</h2>
@@ -90,22 +113,14 @@ function Conversation({
         <div className="chat-row agent-row">
           <span className="chat-avatar">A</span>
           <div>
-            <p>
-              I&apos;ve reviewed your purchase intent. You currently have{" "}
-              {session.items.length} item
-              {session.items.length === 1 ? "" : "s"} selected.
-            </p>
+            <p>{messages.greeting}</p>
             <time>Just now</time>
           </div>
         </div>
         <div className="chat-row agent-row">
           <span className="chat-avatar">A</span>
           <div>
-            <p>
-              Your current order total is <strong>{money(total)}</strong>. I
-              &apos;ll verify every item against the merchant catalog before
-              approval.
-            </p>
+            <p>{messages.review}</p>
             <time>Just now</time>
           </div>
         </div>
@@ -113,30 +128,19 @@ function Conversation({
           <div className="chat-row agent-row recommendation-chat">
             <span className="chat-avatar">A</span>
             <div>
-              <p>
-                I found a complementary product that may improve your setup.
-              </p>
+              <p>I found a complementary product that may improve your setup.</p>
               <div className="chat-recommendation">
                 <ProductVisual product={recommendation} />
                 <div>
-                  <strong>
-                    Would you like to add {recommendation.name}?
-                  </strong>
-                  <span>
-                    {money(recommendation.price)} {"\u00B7"}{" "}
-                    {recommendation.stock} in stock
-                  </span>
+                  <strong>Would you like to add {recommendation.name}?</strong>
+                  <span>₹{recommendation.price.toLocaleString("en-IN")} · {recommendation.stock} in stock</span>
                 </div>
               </div>
               <div className="chat-actions">
-                <button className="primary-button" onClick={onAdd}>
-                  Add to Order <span>+</span>
-                </button>
-                <button className="secondary-button" onClick={onDecline}>
-                  No Thanks
-                </button>
+                <button className="primary-button" onClick={onAdd}>Add to Order <span>+</span></button>
+                <button className="secondary-button" onClick={onDecline}>No Thanks</button>
               </div>
-              <time>Suggested by Growth Agent</time>
+              <time>Suggested by AI Growth Agent</time>
             </div>
           </div>
         )}
@@ -144,12 +148,7 @@ function Conversation({
           <div className="chat-row agent-row">
             <span className="chat-avatar">A</span>
             <div>
-              <p>
-                You explicitly approved the creation of a Razorpay test-mode
-                order for{" "}
-                {money(session.approvedAmount ?? total)}. The amount and items
-                are locked to your approved checkout.
-              </p>
+              <p>{messages.approval}</p>
               <time>Just now</time>
             </div>
           </div>
@@ -158,12 +157,7 @@ function Conversation({
           <div className="chat-row agent-row">
             <span className="chat-avatar">A</span>
             <div>
-              <p>
-                A Razorpay Test Mode order has been created successfully. I can
-                now open the secure payment interface for{" "}
-                {money(session.razorpayOrderAmount ?? total)}, but I will not do
-                so automatically. Please review and approve opening the payment.
-              </p>
+              <p>{messages.orderCreated}</p>
               <time>Just now</time>
             </div>
           </div>
@@ -391,6 +385,7 @@ export function CheckoutWorkspace() {
   const [orderCreationInProgress, setOrderCreationInProgress] =
     useState(false);
   const [paymentAttempting, setPaymentAttempting] = useState(false);
+  const [recommendation, setRecommendation] = useState<Product | undefined>();
   const { sdkLoaded } = useRazorpayCheckout();
 
   useEffect(() => {
@@ -409,19 +404,26 @@ export function CheckoutWorkspace() {
     return () => { mounted = false; };
   }, [refreshKey]);
 
-  const recommendation = useMemo(() => {
-    if (!session || !products.length) return undefined;
-    const selectedIds = new Set(
-      session.items.map((item) => item.productId)
-    );
-    return analyzeCatalog(products)
-      .flatMap((opportunity) => opportunity.recommendedProducts)
-      .find(
-        (product) =>
-          !selectedIds.has(product.id) &&
-          product.stock > 0 &&
-          product.id !== declinedRecommendationId
-      );
+  useEffect(() => {
+    if (!session || !products.length) {
+      setRecommendation(undefined);
+      return;
+    }
+    const selectedIds = new Set(session.items.map((item) => item.productId));
+    let cancelled = false;
+    analyzeCatalog(products).then((results) => {
+      if (cancelled) return;
+      const found = results
+        .flatMap((opp) => opp.recommendedProducts)
+        .find(
+          (product) =>
+            !selectedIds.has(product.id) &&
+            product.stock > 0 &&
+            product.id !== declinedRecommendationId
+        );
+      setRecommendation(found);
+    });
+    return () => { cancelled = true; };
   }, [session, products, declinedRecommendationId]);
 
   const total =

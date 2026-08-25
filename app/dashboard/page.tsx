@@ -7,6 +7,7 @@ import { GrowthOpportunity } from "@/components/dashboard/GrowthOpportunity";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { SafetyCard } from "@/components/dashboard/SafetyCard";
+import { DashboardCampaigns } from "@/components/dashboard/DashboardCampaigns";
 import { getAuditEvents } from "@/lib/auditLogger";
 import { getDashboardMetrics, type DashboardMetrics } from "@/lib/dashboardStats";
 import type { AuditEvent } from "@/types/audit";
@@ -111,7 +112,7 @@ export default function DashboardPage() {
   const metricCards = [
     { label: "Total Revenue", value: metrics.totalRevenue, detail: "Total merchant revenue", tone: "neutral" },
     { label: "AI-Influenced Revenue", value: metrics.aiInfluencedRevenue, detail: "Revenue from AI recommendations", tone: "positive" },
-    { label: "Potential Upsell Revenue", value: metrics.potentialUpsell, detail: "Revenue opportunities identified", tone: "amber" },
+    { label: "Potential Upsell Revenue", value: metrics.potentialUpsell, detail: "AI-identified opportunities", tone: "amber" },
     { label: "Total Orders", value: String(metrics.totalOrders), detail: "Completed orders", tone: "neutral" },
   ];
 
@@ -145,6 +146,7 @@ export default function DashboardPage() {
           ))}
         </section>
         <GrowthOpportunity />
+        <DashboardCampaigns />
         <div className="lower-grid">
           <RecentActivity />
           <SafetyCard />

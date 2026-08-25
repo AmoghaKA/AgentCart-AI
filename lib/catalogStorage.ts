@@ -53,8 +53,12 @@ export async function loadProducts(): Promise<Product[]> {
 export async function addProduct(product: Product): Promise<Product | null> {
   try {
     const merchantId = await getMerchantIdForUser();
-    if (!merchantId) return null;
+    if (!merchantId) {
+      console.error("addProduct failed: No merchant found for current user. Make sure you have a merchant account.");
+      return null;
+    }
 
+    console.log("addProduct: inserting for merchant", merchantId, product.name);
     const { data, error } = await q().from("products").insert({
       id: product.id,
       merchant_id: merchantId,
@@ -68,18 +72,25 @@ export async function addProduct(product: Product): Promise<Product | null> {
       updated_at: product.updatedAt,
     }).select().single();
     if (error) {
-      console.error("Failed to add product to Supabase:", error.message);
+      console.error("Failed to add product to Supabase:", JSON.stringify(error));
       return null;
     }
+    console.log("addProduct: success", data.id);
     return data ? rowToProduct(data) : null;
-  } catch (err) {
-    console.error("Supabase connection error:", err);
+  } catch (err: any) {
+    console.error("Supabase connection error:", err?.message || err);
     return null;
   }
 }
 
 export async function updateProduct(product: Product): Promise<Product | null> {
   try {
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) {
+      console.error("updateProduct failed: No merchant found for current user");
+      return null;
+    }
+
     const { data, error } = await q().from("products").update({
       name: product.name,
       description: product.description,
@@ -88,28 +99,34 @@ export async function updateProduct(product: Product): Promise<Product | null> {
       stock: product.stock,
       image: product.image,
       updated_at: product.updatedAt,
-    }).eq("id", product.id).select().single();
+    }).eq("id", product.id).eq("merchant_id", merchantId).select().single();
     if (error) {
-      console.error("Failed to update product in Supabase:", error.message);
+      console.error("Failed to update product in Supabase:", JSON.stringify(error));
       return null;
     }
     return data ? rowToProduct(data) : null;
-  } catch (err) {
-    console.error("Supabase connection error:", err);
+  } catch (err: any) {
+    console.error("Supabase connection error:", err?.message || err);
     return null;
   }
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
   try {
-    const { error } = await q().from("products").delete().eq("id", id);
+    const merchantId = await getMerchantIdForUser();
+    if (!merchantId) {
+      console.error("deleteProduct failed: No merchant found for current user");
+      return false;
+    }
+
+    const { error } = await q().from("products").delete().eq("id", id).eq("merchant_id", merchantId);
     if (error) {
-      console.error("Failed to delete product from Supabase:", error.message);
+      console.error("Failed to delete product from Supabase:", JSON.stringify(error));
       return false;
     }
     return true;
-  } catch (err) {
-    console.error("Supabase connection error:", err);
+  } catch (err: any) {
+    console.error("Supabase connection error:", err?.message || err);
     return false;
   }
 }

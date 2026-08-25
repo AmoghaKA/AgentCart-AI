@@ -26,22 +26,24 @@ export function GrowthWorkspace() {
     setIsAnalyzing(true);
     const latestProducts = await loadProducts();
     setProducts(latestProducts);
-    window.setTimeout(async () => {
-      const results = analyzeCatalog(latestProducts);
+    try {
+      const results = await analyzeCatalog(latestProducts);
       setOpportunities(results);
       setHasAnalyzed(true);
-      setIsAnalyzing(false);
       await logAuditEvent({
         actor: "agent",
-        action: "Growth analysis executed",
+        action: "AI Growth analysis executed",
         category: "growth",
         status: results.length > 0 ? "success" : "blocked",
-        description: `Analyzed ${latestProducts.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`,
-        details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No complementary product relationships found",
+        description: `AI analyzed ${latestProducts.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`,
+        details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No opportunities found",
         amount: results.reduce((sum, r) => sum + r.additionalRevenue, 0),
         currency: "INR",
       });
-    }, 320);
+    } catch (error) {
+      console.error("AI analysis failed:", error);
+    }
+    setIsAnalyzing(false);
   };
 
   useEffect(() => {
@@ -51,36 +53,33 @@ export function GrowthWorkspace() {
       if (mounted) {
         setProducts(data);
         setLoading(false);
-        // Auto-run analysis
-        const results = analyzeCatalog(data);
-        setOpportunities(results);
-        setHasAnalyzed(true);
-        await logAuditEvent({
-          actor: "agent",
-          action: "Growth analysis executed",
-          category: "growth",
-          status: results.length > 0 ? "success" : "blocked",
-          description: `Analyzed ${data.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`,
-          details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No complementary product relationships found",
-          amount: results.reduce((sum, r) => sum + r.additionalRevenue, 0),
-          currency: "INR",
-        });
+        try {
+          const results = await analyzeCatalog(data);
+          setOpportunities(results);
+          setHasAnalyzed(true);
+          await logAuditEvent({
+            actor: "agent",
+            action: "AI Growth analysis executed",
+            category: "growth",
+            status: results.length > 0 ? "success" : "blocked",
+            description: `AI analyzed ${data.length} products — ${results.length} growth opportunit${results.length === 1 ? "y" : "ies"} identified`,
+            details: results.length > 0 ? results.map((r) => `${r.mainProduct.name} → ${r.recommendedProducts.map((p) => p.name).join(", ")}`).join("; ") : "No opportunities found",
+            amount: results.reduce((sum, r) => sum + r.additionalRevenue, 0),
+            currency: "INR",
+          });
+        } catch (error) {
+          console.error("AI analysis failed:", error);
+        }
       }
     })();
     return () => { mounted = false; };
   }, []);
 
-  const totalAdditionalRevenue = useMemo(() => opportunities.reduce((total, opportunity) => total + opportunity.additionalRevenue, 0), [opportunities]);
+  const totalAdditionalRevenue = useMemo(() => opportunities.reduce((total, o) => total + o.additionalRevenue, 0), [opportunities]);
   const averageImpact = opportunities.length ? Math.round(totalAdditionalRevenue / opportunities.length) : 0;
 
   if (loading) {
-    return (
-      <div className="growth-page">
-        <div className="loading-state">
-          <p>Loading catalog from Supabase...</p>
-        </div>
-      </div>
-    );
+    return <div className="growth-page"><div className="loading-state"><p>Loading catalog from Supabase...</p></div></div>;
   }
 
   return (
@@ -89,16 +88,16 @@ export function GrowthWorkspace() {
         <div>
           <p className="eyebrow">REVENUE INTELLIGENCE <span className="eyebrow-slash">/</span> AI GROWTH AGENT</p>
           <h1>AI Growth Agent</h1>
-          <p className="header-subtitle">Analyze your catalog to identify intelligent upsell and cross-sell opportunities that can increase merchant revenue.</p>
+          <p className="header-subtitle">LLM-powered analysis identifies intelligent upsell and cross-sell opportunities to increase merchant revenue.</p>
         </div>
         <button className="primary-button analyze-button" onClick={runAnalysis} disabled={isAnalyzing}>
           <span className={isAnalyzing ? "spin-icon" : "spark-button-icon"}>{isAnalyzing ? "◌" : "✦"}</span>
-          {isAnalyzing ? "Analyzing catalog..." : "Analyze Catalog"}
+          {isAnalyzing ? "AI is analyzing..." : "Run AI Analysis"}
         </button>
       </header>
       {isAnalyzing && (
         <div className="analysis-progress">
-          <span className="status-dot" /> Analyzing product relationships <i /> Identifying complementary products <i /> Calculating revenue opportunities
+          <span className="status-dot" /> AI is analyzing product relationships <i /> Identifying cross-sell & upsell opportunities <i /> Calculating revenue impact
         </div>
       )}
       {hasAnalyzed && (
@@ -110,8 +109,8 @@ export function GrowthWorkspace() {
             <div className="growth-summary-card"><span className="summary-icon summary-icon-purple">◒</span><div><strong>+{money(averageImpact)}</strong><span>Average order value impact</span></div></div>
           </section>
           <section className="opportunities-heading">
-            <div><p className="eyebrow">CATALOG SIGNALS</p><h2>Revenue opportunities <span>{opportunities.length}</span></h2></div>
-            <p>Recommendations are based on your live catalog and available stock.</p>
+            <div><p className="eyebrow">AI RECOMMENDATIONS</p><h2>Revenue opportunities <span>{opportunities.length}</span></h2></div>
+            <p>AI-powered recommendations based on catalog analysis and product relationships.</p>
           </section>
           {opportunities.length ? (
             <div className="growth-opportunity-list">

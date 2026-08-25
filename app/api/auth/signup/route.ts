@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     ];
 
     const products = defaultProducts.map((p, i) => ({
-      id: `product-${Date.now()}-${i}`,
+      id: crypto.randomUUID(),
       merchant_id: merchant.id,
       ...p,
       created_at: now,

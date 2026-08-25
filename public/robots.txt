@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /api/catalog
+Disallow: /api/razorpay/
+Disallow: /api/auth/
+Disallow: /api/webhooks/
+Disallow: /api/chat/
+
+Sitemap: /

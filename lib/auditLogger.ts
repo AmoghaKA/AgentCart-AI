@@ -56,16 +56,13 @@ export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent>
       amount: input.amount ?? null,
       currency: input.currency || null,
       reference_id: input.referenceId || null,
+      merchant_id: merchantId || null,
     };
-
-    if (merchantId) {
-      insertData.merchant_id = merchantId;
-    }
 
     const { data, error } = await q().from("audit_events").insert(insertData).select().single();
 
     if (error) {
-      console.error("Failed to log audit event to Supabase:", error.message);
+      console.error("Failed to log audit event to Supabase:", JSON.stringify(error));
       return {
         ...input,
         id: `audit-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -74,8 +71,8 @@ export async function logAuditEvent(input: AuditEventInput): Promise<AuditEvent>
     }
 
     return rowToEvent(data);
-  } catch (err) {
-    console.error("Supabase connection error for audit:", err);
+  } catch (err: any) {
+    console.error("Supabase connection error for audit:", err?.message || err);
     return {
       ...input,
       id: `audit-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

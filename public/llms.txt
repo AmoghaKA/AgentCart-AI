@@ -1,0 +1,59 @@
+# AgentCart AI - Merchant Catalog API
+
+## Overview
+AgentCart is an agentic commerce platform that makes merchants transactable by AI buyers. This API serves an agent-readable product catalog.
+
+## Authentication
+- Catalog API (`/api/catalog`) is public for agent discovery
+- All other endpoints require Supabase authentication
+
+## Endpoints
+
+### GET /api/catalog
+Returns the full merchant product catalog in agent-readable JSON format.
+
+Query Parameters:
+- `format=json-ld` — Returns Schema.org JSON-LD structured data
+- `format=openapi` — Returns OpenAPI 3.0 specification
+
+Response:
+```json
+{
+  "merchant": {
+    "name": "Store Name",
+    "description": "Store description",
+    "currency": "INR"
+  },
+  "products": [
+    {
+      "id": "product-id",
+      "name": "Product Name",
+      "description": "Product description",
+      "category": "Category",
+      "price": 1000,
+      "currency": "INR",
+      "stock": 10,
+      "available": true
+    }
+  ]
+}
+```
+
+### POST /api/chat
+AI-powered buyer assistant chat. Requires authentication.
+
+### POST /api/razorpay/create-order
+Creates a Razorpay test-mode order. Requires authentication and explicit approval.
+
+### POST /api/razorpay/verify-payment
+Verifies Razorpay payment signature. Requires authentication.
+
+### POST /api/webhooks/razorpay
+Razorpay webhook receiver for payment events.
+
+## Safety
+All money actions are:
+- Explainable: Every action has a clear explanation
+- Bounded: Transaction limits enforced server-side
+- Gated: Requires explicit buyer approval
+- Audited: Full audit trail in Supabase

@@ -7,14 +7,24 @@ export interface AuthUser {
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const supabase = getSupabaseBrowserClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error("getCurrentUser error:", error.message);
+    return null;
+  }
+  if (!user) {
+    console.warn("getCurrentUser: no user session found");
+    return null;
+  }
   return { id: user.id, email: user.email || "" };
 }
 
 export async function getMerchantIdForUser(): Promise<string | null> {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user) {
+    console.warn("getMerchantIdForUser: no user, returning null");
+    return null;
+  }
 
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -23,7 +33,14 @@ export async function getMerchantIdForUser(): Promise<string | null> {
     .eq("user_id", user.id)
     .single();
 
-  if (error || !data) return null;
+  if (error) {
+    console.error("getMerchantIdForUser query error:", JSON.stringify(error));
+    return null;
+  }
+  if (!data) {
+    console.warn("getMerchantIdForUser: no merchant found for user_id", user.id);
+    return null;
+  }
   return data.id;
 }
 
@@ -76,7 +93,7 @@ export async function signUp(email: string, password: string, storeName: string)
       ];
 
       const products = defaultProducts.map((p, i) => ({
-        id: `product-${Date.now()}-${i}`,
+        id: crypto.randomUUID(),
         merchant_id: merchant.id,
         ...p,
         created_at: now,

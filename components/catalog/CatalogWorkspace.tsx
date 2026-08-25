@@ -43,7 +43,7 @@ export function CatalogWorkspace() {
     const productCategory = values.category === "__new__" ? values.newCategory.trim() : values.category;
     const existing = modal?.product;
     const product: Product = {
-      id: existing?.id ?? `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: existing?.id ?? crypto.randomUUID(),
       name: values.name.trim(),
       description: values.description.trim(),
       category: productCategory,
@@ -54,13 +54,21 @@ export function CatalogWorkspace() {
       updatedAt: now,
     };
     if (existing) {
-      await updateProduct(product);
-      setProducts((current) => current.map((item) => item.id === product.id ? product : item));
-      await logAuditEvent({ actor: "agent", action: "Product updated in catalog", category: "catalog", status: "success", description: `${product.name} (${product.category}) updated — price: ₹${product.price.toLocaleString("en-IN")}, stock: ${product.stock}`, referenceId: product.id, amount: product.price, currency: "INR" });
+      const result = await updateProduct(product);
+      if (result) {
+        setProducts((current) => current.map((item) => item.id === product.id ? product : item));
+        await logAuditEvent({ actor: "agent", action: "Product updated in catalog", category: "catalog", status: "success", description: `${product.name} (${product.category}) updated — price: ₹${product.price.toLocaleString("en-IN")}, stock: ${product.stock}`, referenceId: product.id, amount: product.price, currency: "INR" });
+      } else {
+        alert("Failed to update product in Supabase. Check console for details.");
+      }
     } else {
-      await addProduct(product);
-      setProducts((current) => [...current, product]);
-      await logAuditEvent({ actor: "agent", action: "Product added to catalog", category: "catalog", status: "success", description: `${product.name} (${product.category}) added — price: ₹${product.price.toLocaleString("en-IN")}, stock: ${product.stock}`, referenceId: product.id, amount: product.price, currency: "INR" });
+      const result = await addProduct(product);
+      if (result) {
+        setProducts((current) => [...current, result]);
+        await logAuditEvent({ actor: "agent", action: "Product added to catalog", category: "catalog", status: "success", description: `${product.name} (${product.category}) added — price: ₹${product.price.toLocaleString("en-IN")}, stock: ${product.stock}`, referenceId: product.id, amount: product.price, currency: "INR" });
+      } else {
+        alert("Failed to add product to Supabase. Check console for details — you may need to run the SQL migration first.");
+      }
     }
     setModal(null);
   };
