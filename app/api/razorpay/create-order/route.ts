@@ -118,6 +118,26 @@ export async function POST(request: NextRequest) {
       (currentProducts || []).map((p: any) => [p.id, p])
     );
 
+    // 3b. Load active campaign discounts
+    const { data: activeCampaigns } = await supabase
+      .from("campaigns" as any)
+      .select("id, target_products, discount_percent")
+      .eq("status", "active")
+      .gt("discount_percent", 0);
+
+    const campaignDiscountMap = new Map<string, number>();
+    if (activeCampaigns) {
+      for (const campaign of activeCampaigns as any[]) {
+        if (!campaign.target_products?.length) continue;
+        for (const pid of campaign.target_products) {
+          const existing = campaignDiscountMap.get(pid) || 0;
+          if (campaign.discount_percent > existing) {
+            campaignDiscountMap.set(pid, campaign.discount_percent);
+          }
+        }
+      }
+    }
+
     // 4. Validate all products exist, have stock, and recalculate totals
     let serverTotal = 0;
     for (const item of orderItems) {
@@ -134,7 +154,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      serverTotal += Number(product.price) * item.quantity;
+      const catalogPrice = Number(product.price);
+      const discountPercent = campaignDiscountMap.get(item.product_id) || 0;
+      const effectivePrice = discountPercent > 0
+        ? Math.round(catalogPrice * (1 - discountPercent / 100))
+        : catalogPrice;
+      serverTotal += effectivePrice * item.quantity;
     }
 
     // 5. Validate the server-calculated total matches the approval

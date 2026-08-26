@@ -78,6 +78,49 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", order.id) as any);
+
+        // Track campaign conversions for products in this order
+        try {
+          const { data: orderItems } = await supabase
+            .from("order_items" as any)
+            .select("product_id, line_total")
+            .eq("order_id", order.id) as any;
+
+          const { data: activeCampaigns } = await supabase
+            .from("campaigns" as any)
+            .select("id, target_products, discount_percent")
+            .eq("status", "active")
+            .gt("discount_percent", 0) as any;
+
+          if (orderItems && activeCampaigns) {
+            for (const item of orderItems) {
+              for (const campaign of activeCampaigns) {
+                if (campaign.target_products?.includes(item.product_id)) {
+                  const revenuePortion = Number(item.line_total || 0);
+                  if (revenuePortion > 0) {
+                    const { data: cRow } = await supabase
+                      .from("campaigns" as any)
+                      .select("conversions, revenue")
+                      .eq("id", campaign.id)
+                      .single() as any;
+                    if (cRow) {
+                      await supabase
+                        .from("campaigns" as any)
+                        .update({
+                          conversions: (cRow.conversions || 0) + 1,
+                          revenue: (cRow.revenue || 0) + revenuePortion,
+                          updated_at: new Date().toISOString(),
+                        })
+                        .eq("id", campaign.id);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (trackingErr) {
+          console.error("Campaign conversion tracking failed:", trackingErr);
+        }
       }
     } catch (dbError) {
       console.error("Failed to update order in Supabase:", dbError);

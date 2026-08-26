@@ -153,6 +153,17 @@ export function CampaignWorkspace() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (!merchantId) return;
+    const interval = setInterval(async () => {
+      const data = await getCampaigns(merchantId);
+      const m = await getCampaignMetrics(merchantId);
+      setCampaigns(data);
+      setMetrics(m);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [merchantId]);
+
   const generateAICampaignsHandler = async () => {
     if (!merchantId) return;
     setGenerating(true);

@@ -50,7 +50,7 @@ function buildExplanation(
     currency: "INR",
     reason:
       "A valid Razorpay Test Mode order was successfully created for the buyer's approved checkout.",
-    merchant: "AgentCart Demo Store",
+    merchant: MERCHANT_NAME,
     result:
       "The buyer will be redirected into Razorpay's secure Test Mode payment interface. The AI agent cannot complete the payment on the buyer's behalf.",
     ...(session.razorpayOrderId ? { orderId: session.razorpayOrderId } : {}),

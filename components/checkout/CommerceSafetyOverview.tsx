@@ -1,4 +1,5 @@
 import { getFlowStage } from "@/lib/actionControls";
+import { MAX_TRANSACTION_AMOUNT } from "@/lib/safety";
 import type { MoneyActionControl } from "@/types/actionControl";
 
 export function CommerceSafetyOverview({
@@ -47,7 +48,7 @@ export function CommerceSafetyOverview({
         </div>
         <div className="safety-check-item">
           <span className="check-icon">✓</span>
-          <span>Transaction amount is limited to ₹1,00,000</span>
+          <span>Transaction amount is limited to ₹{MAX_TRANSACTION_AMOUNT.toLocaleString("en-IN")}</span>
         </div>
         <div className="safety-check-item">
           <span className="check-icon">✓</span>

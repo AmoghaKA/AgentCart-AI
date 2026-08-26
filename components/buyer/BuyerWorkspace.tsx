@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { createCheckoutSession, saveCheckoutSession } from "@/lib/checkoutStorage";
 import type { CheckoutItem } from "@/types/checkout";
 import { getActiveCampaignDiscounts, getBestDiscountForProduct, type ProductDiscount } from "@/lib/campaignEffects";
+import { trackImpression, trackClick } from "@/lib/campaignTracker";
 
 function money(value: number) {
   return `\u20B9${value.toLocaleString("en-IN")}`;
@@ -221,6 +222,15 @@ export function BuyerWorkspace() {
             timestamp: new Date(),
           },
         ]);
+
+        const trackedCampaigns = new Set<string>();
+        for (const product of data) {
+          const discount = getBestDiscountForProduct(product.id, discounts, product.price);
+          if (discount && !trackedCampaigns.has(discount.campaignId)) {
+            trackedCampaigns.add(discount.campaignId);
+            trackImpression(discount.campaignId);
+          }
+        }
       }
     })();
     return () => { mounted = false; };
@@ -325,6 +335,13 @@ export function BuyerWorkspace() {
         )
       );
 
+      for (const match of matches) {
+        const discount = getBestDiscountForProduct(match.product.id, latestDiscounts, match.product.price);
+        if (discount) {
+          trackImpression(discount.campaignId);
+        }
+      }
+
       await logAuditEvent({
         actor: "buyer",
         action: "Buyer request processed",
@@ -392,12 +409,20 @@ export function BuyerWorkspace() {
   };
 
   const toggleSelection = (product: AgentReadableProduct) => {
+    const wasSelected = selected.some((p) => p.id === product.id);
     setSelected((prev) => {
       const exists = prev.some((p) => p.id === product.id);
       if (exists) return prev.filter((p) => p.id !== product.id);
       return [...prev, product];
     });
     setQuantities((prev) => ({ ...prev, [product.id]: 1 }));
+
+    if (!wasSelected) {
+      const discount = getBestDiscountForProduct(product.id, discountMap, product.price);
+      if (discount) {
+        trackClick(discount.campaignId);
+      }
+    }
   };
 
   const updateQuantity = (id: string, value: number) => {

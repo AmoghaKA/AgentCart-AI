@@ -40,8 +40,7 @@ export async function POST(request: Request) {
           .from("orders")
           .update({
             status: "paid",
-            payment_id: paymentId,
-            payment_verified: true,
+            razorpay_payment_id: paymentId,
             updated_at: new Date().toISOString(),
           })
           .eq("razorpay_order_id", orderId);

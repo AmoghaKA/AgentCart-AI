@@ -25,28 +25,11 @@ function q() {
   return getSupabaseBrowserClient();
 }
 
-function simulateMetrics(type: string, discount: number, productCount: number) {
-  const baseImpressions = type === "discount" ? 1800 : type === "bundle" ? 1200 : type === "cross_sell" ? 900 : 700;
-  const impressions = baseImpressions + Math.floor(Math.random() * baseImpressions * 0.6);
-
-  const ctrBase = discount > 10 ? 0.12 : discount > 0 ? 0.09 : 0.06;
-  const clicks = Math.floor(impressions * (ctrBase + Math.random() * 0.04));
-
-  const cvrBase = type === "bundle" ? 0.14 : type === "discount" ? 0.11 : 0.08;
-  const conversions = Math.floor(clicks * (cvrBase + Math.random() * 0.04));
-
-  const avgPrice = 800 + Math.floor(Math.random() * 2000);
-  const revenue = conversions * avgPrice;
-
-  return { impressions, clicks, conversions, revenue };
-}
-
 export async function createCampaign(
   merchantId: string,
   campaign: Omit<Campaign, "id" | "merchant_id" | "created_at" | "updated_at" | "impressions" | "clicks" | "conversions" | "revenue">
 ): Promise<Campaign | null> {
   const now = new Date().toISOString();
-  const metrics = simulateMetrics(campaign.type, campaign.discount_percent || 0, campaign.target_products.length);
   const { data, error } = await q()
     .from("campaigns")
     .insert({
@@ -59,10 +42,10 @@ export async function createCampaign(
       message: campaign.message,
       starts_at: campaign.starts_at,
       ends_at: campaign.ends_at,
-      impressions: metrics.impressions,
-      clicks: metrics.clicks,
-      conversions: metrics.conversions,
-      revenue: metrics.revenue,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      revenue: 0,
       created_at: now,
       updated_at: now,
     })
@@ -203,10 +186,8 @@ export async function getCampaignMetrics(merchantId: string) {
 }
 
 export async function activateCampaign(campaign: Campaign): Promise<Campaign | null> {
-  const activationBump = 50 + Math.floor(Math.random() * 100);
   const updated = await updateCampaign(campaign.id, {
     status: "active",
-    impressions: campaign.impressions + activationBump,
   });
 
   if (updated) {

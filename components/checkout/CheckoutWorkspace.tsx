@@ -25,6 +25,8 @@ import type { MoneyActionControl } from "@/types/actionControl";
 import type { Product } from "@/types/product";
 import { ProductVisual } from "@/components/catalog/ProductCard";
 import { ActionControlPanel } from "./ActionControlPanel";
+import { ActionBlockedReasons } from "./ActionBlockedReason";
+import { CommerceSafetyOverview } from "./CommerceSafetyOverview";
 import { PaymentApprovalGate } from "./PaymentApprovalGate";
 import { PaymentFailure } from "./PaymentFailure";
 import { getActiveCampaignDiscounts, getBestDiscountForProduct, calculateDiscountedTotal, type ProductDiscount } from "@/lib/campaignEffects";
@@ -80,28 +82,32 @@ function useRazorpayCheckout() {
 function Conversation({
   session,
   total,
+  validation,
   recommendation,
   onAdd,
   onDecline,
 }: {
   session: CheckoutSession;
   total: number;
+  validation: SafetyValidation;
   recommendation?: Product;
   onAdd: () => void;
   onDecline: () => void;
 }) {
-  const [messages, setMessages] = useState<{ greeting: string; review: string; safety: string; approval: string; orderCreated: string }>({
+  const [messages, setMessages] = useState<{ greeting: string; review: string; safety: string; approval: string; orderCreated: string; payment: string; complete: string }>({
     greeting: `I've reviewed your purchase intent. You have ${session.items.length} item${session.items.length === 1 ? "" : "s"}.`,
     review: `Your order total is ₹${total.toLocaleString("en-IN")}. I'll verify every item against the merchant catalog.`,
     safety: "All safety checks passed — prices verified, stock confirmed, transaction limits respected.",
     approval: `Your order is ready. Please approve to create a Razorpay test-mode order for ₹${total.toLocaleString("en-IN")}.`,
     orderCreated: "A Razorpay test order has been created. I can open the secure payment interface, but I will not do so automatically.",
+    payment: "Payment interface is ready. Please review and complete the secure Razorpay test payment.",
+    complete: `Payment verified successfully! Your transaction of ₹${total.toLocaleString("en-IN")} is complete.`,
   });
 
   useEffect(() => {
     const itemDetails = session.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice }));
     (async () => {
-      const phases = ["greeting", "review", "safety", "approval", "order_created"] as const;
+      const phases = ["greeting", "review", "safety", "approval", "order_created", "payment", "complete"] as const;
       const results = await Promise.all(
         phases.map(async (phase) => {
           try {
@@ -124,9 +130,13 @@ function Conversation({
         safety: results[2],
         approval: results[3],
         orderCreated: results[4],
+        payment: results[5],
+        complete: results[6],
       });
     })();
   }, [session.items.length, total, session.items]);
+
+  const safetyPassed = validation.passed;
 
   return (
     <section className="checkout-conversation">
@@ -137,7 +147,7 @@ function Conversation({
           <h2>Conversational checkout</h2>
         </div>
         <span className="conversation-status">
-          {session.status === "approved" ? "Approved" : "Reviewing"}
+          {session.status === "payment_verified" ? "Complete" : session.status === "approved" || session.status === "order_created" ? "Processing" : "Reviewing"}
         </span>
       </div>
       <div className="conversation-feed">
@@ -152,6 +162,13 @@ function Conversation({
           <span className="chat-avatar">A</span>
           <div>
             <p>{messages.review}</p>
+            <time>Just now</time>
+          </div>
+        </div>
+        <div className="chat-row agent-row">
+          <span className="chat-avatar">A</span>
+          <div>
+            <p>{safetyPassed ? messages.safety : `Safety check failed — ${validation.checks.filter((c) => !c.passed).length} issue${validation.checks.filter((c) => !c.passed).length === 1 ? "" : "s"} found. Please review the safety panel.`}</p>
             <time>Just now</time>
           </div>
         </div>
@@ -175,7 +192,7 @@ function Conversation({
             </div>
           </div>
         )}
-        {session.status === "approved" && (
+        {(session.status === "approved" || session.status === "order_created" || session.status === "payment_opened" || session.status === "payment_verified") && (
           <div className="chat-row agent-row">
             <span className="chat-avatar">A</span>
             <div>
@@ -184,11 +201,38 @@ function Conversation({
             </div>
           </div>
         )}
-        {session.status === "order_created" && (
+        {(session.status === "order_created" || session.status === "payment_opened" || session.status === "payment_verified") && (
           <div className="chat-row agent-row">
             <span className="chat-avatar">A</span>
             <div>
               <p>{messages.orderCreated}</p>
+              <time>Just now</time>
+            </div>
+          </div>
+        )}
+        {(session.status === "payment_opened" || session.status === "payment_verified") && (
+          <div className="chat-row agent-row">
+            <span className="chat-avatar">A</span>
+            <div>
+              <p>{messages.payment}</p>
+              <time>Just now</time>
+            </div>
+          </div>
+        )}
+        {session.status === "payment_verified" && (
+          <div className="chat-row agent-row conversation-success">
+            <span className="chat-avatar">A</span>
+            <div>
+              <p>{messages.complete}</p>
+              <time>Just now</time>
+            </div>
+          </div>
+        )}
+        {session.status === "payment_failed" && (
+          <div className="chat-row agent-row conversation-failure">
+            <span className="chat-avatar">A</span>
+            <div>
+              <p>The payment was not completed. You can retry or return to the AI Buyer. No money has been deducted.</p>
               <time>Just now</time>
             </div>
           </div>
@@ -993,9 +1037,9 @@ export function CheckoutWorkspace() {
         </div>
       </div>
 
-      <div className="checkout-safety-bar">
-        <div className="safety-bar-icon">{"\u2713"}</div>
-        <span className="safety-bar-text">All safety checks passed — prices verified, stock confirmed, transaction limits respected</span>
+      <div className={`checkout-safety-bar ${validation.passed ? "" : "safety-bar-failed"}`}>
+        <div className="safety-bar-icon">{validation.passed ? "\u2713" : "\u2717"}</div>
+        <span className="safety-bar-text">{validation.passed ? "All safety checks passed — prices verified, stock confirmed, transaction limits respected" : "Some safety checks failed — review issues below"}</span>
         <div className="safety-bar-items">
           {validation.checks.map((check) => (
             <span className="safety-bar-item" key={check.label}>
@@ -1010,6 +1054,7 @@ export function CheckoutWorkspace() {
           <Conversation
             session={session}
             total={total}
+            validation={validation}
             recommendation={recommendation}
             onAdd={addSuggestion}
             onDecline={declineSuggestion}
@@ -1041,19 +1086,24 @@ export function CheckoutWorkspace() {
 
       {/* Action Control Panel — Explains the current money action */}
       {(session.status === "reviewing" || session.status === "approved") && (
-        <ActionControlPanel
-          control={orderControl}
-          explanation={{
-            action: "Create Razorpay Test-Mode Order",
-            amount: total,
-            currency: "INR",
-            reason:
-              "The buyer selected these products and explicitly approved order creation after reviewing the complete order.",
-            merchant: MERCHANT_NAME,
-            result:
-              "A Razorpay Test Mode order will be created. No payment will be completed automatically.",
-          }}
-        />
+        <>
+          <ActionControlPanel
+            control={orderControl}
+            explanation={{
+              action: "Create Razorpay Test-Mode Order",
+              amount: total,
+              currency: "INR",
+              reason:
+                "The buyer selected these products and explicitly approved order creation after reviewing the complete order.",
+              merchant: MERCHANT_NAME,
+              result:
+                "A Razorpay Test Mode order will be created. No payment will be completed automatically.",
+            }}
+          />
+          {orderControl.blockedReasons.length > 0 && (
+            <ActionBlockedReasons reasons={orderControl.blockedReasons} />
+          )}
+        </>
       )}
 
       {/* Payment Action Control Panel — After order is created */}
@@ -1062,24 +1112,35 @@ export function CheckoutWorkspace() {
         session.status === "payment_verifying" ||
         session.status === "payment_verified" ||
         session.status === "payment_failed") && (
-        <ActionControlPanel
-          control={paymentControl}
-          explanation={{
-            action: "Open Razorpay Test Payment",
-            amount:
-              session.razorpayOrderAmount ??
-              session.approvedAmount ??
-              total,
-            currency: "INR",
-            reason:
-              "A valid Razorpay Test Mode order was successfully created for the buyer's approved checkout.",
-            merchant: MERCHANT_NAME,
-            result:
-              "The buyer will be redirected into Razorpay's secure Test Mode payment interface. The AI agent cannot complete the payment on the buyer's behalf.",
-          }}
-          orderId={session.razorpayOrderId}
-        />
+        <>
+          <ActionControlPanel
+            control={paymentControl}
+            explanation={{
+              action: "Open Razorpay Test Payment",
+              amount:
+                session.razorpayOrderAmount ??
+                session.approvedAmount ??
+                total,
+              currency: "INR",
+              reason:
+                "A valid Razorpay Test Mode order was successfully created for the buyer's approved checkout.",
+              merchant: MERCHANT_NAME,
+              result:
+                "The buyer will be redirected into Razorpay's secure Test Mode payment interface. The AI agent cannot complete the payment on the buyer's behalf.",
+            }}
+            orderId={session.razorpayOrderId}
+          />
+          {paymentControl.blockedReasons.length > 0 && (
+            <ActionBlockedReasons reasons={paymentControl.blockedReasons} />
+          )}
+        </>
       )}
+
+      {/* Commerce Safety Overview — Always shows the safety flow */}
+      <CommerceSafetyOverview
+        orderControl={orderControl}
+        paymentControl={paymentControl}
+      />
 
       {/* Order Approval Gate */}
       {session.status === "reviewing" && (

@@ -1,7 +1,4 @@
 // Centralized configuration for AgentCart AI
-// The demo merchant ID is stored here so it's not scattered across the codebase.
-
-export const DEMO_MERCHANT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 export const MERCHANT_NAME = "AgentCart Demo Store";
 
