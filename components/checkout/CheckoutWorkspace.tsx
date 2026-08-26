@@ -27,6 +27,7 @@ import { ProductVisual } from "@/components/catalog/ProductCard";
 import { ActionControlPanel } from "./ActionControlPanel";
 import { PaymentApprovalGate } from "./PaymentApprovalGate";
 import { PaymentFailure } from "./PaymentFailure";
+import { getActiveCampaignDiscounts, getBestDiscountForProduct, calculateDiscountedTotal, type ProductDiscount } from "@/lib/campaignEffects";
 
 function money(value: number) {
   return `\u20B9${value.toLocaleString("en-IN")}`;
@@ -202,15 +203,21 @@ function OrderSummary({
   products,
   onQuantity,
   onRemove,
+  discountMap,
 }: {
   session: CheckoutSession;
   products: Product[];
   onQuantity: (id: string, quantity: number) => void;
   onRemove: (id: string) => void;
+  discountMap: Map<string, ProductDiscount[]>;
 }) {
-  const total = session.items.reduce(
-    (sum, item) => sum + itemTotal(item, products),
-    0
+  const { subtotal, discount, total, appliedDiscounts } = calculateDiscountedTotal(
+    session.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: products.find((p) => p.id === item.productId)?.price ?? item.unitPrice,
+    })),
+    discountMap
   );
   return (
     <section className="checkout-summary">
@@ -239,8 +246,10 @@ function OrderSummary({
             stock: 0,
             available: false,
           };
-          const unitPrice = product?.price ?? item.unitPrice;
-          const lineTotal = itemTotal(item, products);
+          const catalogPrice = product?.price ?? item.unitPrice;
+          const discount = getBestDiscountForProduct(item.productId, discountMap, catalogPrice);
+          const effectiveUnitPrice = discount ? discount.discountedPrice : catalogPrice;
+          const lineTotal = effectiveUnitPrice * item.quantity;
           const inStock = (product?.stock ?? 0) > 0;
           const lowStock = (product?.stock ?? 0) > 0 && (product?.stock ?? 0) <= 5;
           return (
@@ -264,7 +273,15 @@ function OrderSummary({
                 </div>
                 <div className="item-card-body">
                   <div className="item-card-pricing">
-                    <span className="item-unit-price">{money(unitPrice)} each</span>
+                    {discount ? (
+                      <span className="buyer-price-with-discount">
+                        <span className="buyer-original-price">{money(catalogPrice)}</span>
+                        <span className="buyer-discounted-price">{money(effectiveUnitPrice)}</span>
+                        <span className="buyer-discount-badge">-{discount.discountPercent}%</span>
+                      </span>
+                    ) : (
+                      <span className="item-unit-price">{money(catalogPrice)} each</span>
+                    )}
                     {inStock && !lowStock && (
                       <span className="item-stock-badge in-stock">
                         <span className="stock-dot" /> In stock
@@ -320,8 +337,20 @@ function OrderSummary({
       <div className="checkout-summary-footer">
         <div className="summary-row">
           <span>Subtotal ({session.items.length} item{session.items.length === 1 ? "" : "s"})</span>
-          <span>{money(total)}</span>
+          <span>{money(subtotal)}</span>
         </div>
+        {discount > 0 && (
+          <div className="summary-row summary-discount">
+            <span>Campaign Discount</span>
+            <strong className="buyer-discount-savings">-{money(discount)}</strong>
+          </div>
+        )}
+        {appliedDiscounts.map((d) => (
+          <div className="summary-row summary-discount-detail" key={d.name}>
+            <span className="summary-discount-label">↳ {d.name}</span>
+            <span className="summary-discount-detail-amount">-{money(d.amount)}</span>
+          </div>
+        ))}
         <div className="summary-row">
           <span>Shipping</span>
           <span className="shipping-free">Free</span>
@@ -416,19 +445,22 @@ export function CheckoutWorkspace() {
     useState(false);
   const [paymentAttempting, setPaymentAttempting] = useState(false);
   const [recommendation, setRecommendation] = useState<Product | undefined>();
+  const [discountMap, setDiscountMap] = useState<Map<string, ProductDiscount[]>>(new Map());
   const { sdkLoaded } = useRazorpayCheckout();
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const [loaded, catalog] = await Promise.all([
+      const [loaded, catalog, discounts] = await Promise.all([
         loadCheckoutSession(),
         loadProducts(),
+        getActiveCampaignDiscounts(),
       ]);
       if (mounted) {
         setSession(loaded);
         setProducts(catalog);
-        if (loaded) setValidation(validateCheckout(loaded.items, catalog));
+        setDiscountMap(discounts);
+        if (loaded) setValidation(validateCheckout(loaded.items, catalog, discounts));
       }
     })();
     return () => { mounted = false; };
@@ -456,11 +488,19 @@ export function CheckoutWorkspace() {
     return () => { cancelled = true; };
   }, [session, products, declinedRecommendationId]);
 
-  const total =
-    session?.items.reduce(
-      (sum, item) => sum + itemTotal(item, products),
-      0
-    ) ?? 0;
+  const { total: discountedTotal, discount: totalDiscount } = useMemo(() => {
+    if (!session) return { total: 0, discount: 0 };
+    return calculateDiscountedTotal(
+      session.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: products.find((p) => p.id === item.productId)?.price ?? item.unitPrice,
+      })),
+      discountMap
+    );
+  }, [session, products, discountMap]);
+
+  const total = discountedTotal;
 
   const orderControl: MoneyActionControl = useMemo(() => {
     if (!session) {
@@ -535,7 +575,7 @@ export function CheckoutWorkspace() {
     });
     const withActivity = await addCheckoutActivity(next, message);
     setSession(withActivity);
-    setValidation(validateCheckout(nextItems, products));
+    setValidation(validateCheckout(nextItems, products, discountMap));
   };
 
   const addSuggestion = () => {
@@ -591,16 +631,14 @@ export function CheckoutWorkspace() {
 
   const approve = async () => {
     if (!session) return;
-    const latestProducts = await loadProducts();
-    const latestValidation = validateCheckout(session.items, latestProducts);
+    const [latestProducts, latestDiscounts] = await Promise.all([loadProducts(), getActiveCampaignDiscounts()]);
+    const latestValidation = validateCheckout(session.items, latestProducts, latestDiscounts);
     setProducts(latestProducts);
+    setDiscountMap(latestDiscounts);
     setValidation(latestValidation);
     if (!latestValidation.passed) return;
     const now = new Date().toISOString();
-    const approvedAmount = session.items.reduce(
-      (sum, item) => sum + itemTotal(item, latestProducts),
-      0
-    );
+    const approvedAmount = latestValidation.total;
     const approved = await updateCheckoutSession(session, {
       status: "approved",
       approvalStatus: "approved",
@@ -615,7 +653,7 @@ export function CheckoutWorkspace() {
     );
     setSession(withActivity);
     setDeclinedRecommendationId(undefined);
-    await logAuditEvent({ actor: "buyer", action: "Buyer approved order creation", category: "checkout", status: "success", description: `Buyer approved creation of Razorpay test-mode order for ₹${session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0).toLocaleString("en-IN")}`, amount: session.items.reduce((sum, item) => sum + itemTotal(item, latestProducts), 0), currency: "INR", referenceId: session.id });
+    await logAuditEvent({ actor: "buyer", action: "Buyer approved order creation", category: "checkout", status: "success", description: `Buyer approved creation of Razorpay test-mode order for ₹${approvedAmount.toLocaleString("en-IN")}`, amount: approvedAmount, currency: "INR", referenceId: session.id });
   };
 
   const approvePaymentAction = async () => {
@@ -658,10 +696,14 @@ export function CheckoutWorkspace() {
       );
       return;
     }
-    const latestProducts = await loadProducts();
-    const currentTotal = session.items.reduce(
-      (sum, item) => sum + itemTotal(item, latestProducts),
-      0
+    const [latestProducts, latestDiscounts] = await Promise.all([loadProducts(), getActiveCampaignDiscounts()]);
+    const { total: currentTotal } = calculateDiscountedTotal(
+      session.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: latestProducts.find((p) => p.id === item.productId)?.price ?? item.unitPrice,
+      })),
+      latestDiscounts
     );
     if (
       Math.abs(currentTotal - (session.approvedAmount ?? 0)) > 0.01
@@ -977,6 +1019,7 @@ export function CheckoutWorkspace() {
             products={products}
             onQuantity={changeQuantity}
             onRemove={removeItem}
+            discountMap={discountMap}
           />
           <div className="checkout-actions-row">
             <button

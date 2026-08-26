@@ -1,5 +1,6 @@
 import type { Product } from "@/types/product";
 import type { CheckoutItem, CheckoutSession } from "@/types/checkout";
+import { getBestDiscountForProduct, type ProductDiscount } from "@/lib/campaignEffects";
 
 export const MAX_TRANSACTION_AMOUNT = 50000;
 export const MAX_QUANTITY_PER_ORDER = 5;
@@ -18,14 +19,17 @@ export interface SafetyValidation {
 
 export function validateCheckout(
   items: CheckoutItem[],
-  catalog: Product[]
+  catalog: Product[],
+  discountMap?: Map<string, ProductDiscount[]>
 ): SafetyValidation {
   const byId = new Map(catalog.map((product) => [product.id, product]));
-  const total = items.reduce(
-    (sum, item) =>
-      sum + (byId.get(item.productId)?.price ?? item.unitPrice) * item.quantity,
-    0
-  );
+  let total = 0;
+  for (const item of items) {
+    const catalogPrice = byId.get(item.productId)?.price ?? item.unitPrice;
+    const discount = discountMap ? getBestDiscountForProduct(item.productId, discountMap, catalogPrice) : null;
+    const effectivePrice = discount ? discount.discountedPrice : catalogPrice;
+    total += effectivePrice * item.quantity;
+  }
   const allProducts =
     items.length > 0 && items.every((item) => byId.has(item.productId));
   const allAvailable =
@@ -44,7 +48,16 @@ export function validateCheckout(
     );
   const pricesVerified =
     allProducts &&
-    items.every((item) => byId.get(item.productId)!.price === item.unitPrice);
+    items.every((item) => {
+      const catalogPrice = byId.get(item.productId)!.price;
+      const unitPrice = item.unitPrice;
+      if (catalogPrice === unitPrice) return true;
+      if (discountMap) {
+        const discount = getBestDiscountForProduct(item.productId, discountMap, catalogPrice);
+        if (discount && discount.discountedPrice === unitPrice) return true;
+      }
+      return false;
+    });
   const checks: SafetyCheck[] = [
     {
       label: `Order total within ₹${MAX_TRANSACTION_AMOUNT.toLocaleString("en-IN")} limit`,

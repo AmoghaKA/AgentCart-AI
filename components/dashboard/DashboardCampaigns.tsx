@@ -10,6 +10,8 @@ import {
   deleteCampaign,
   generateAICampaigns,
   getCampaignMetrics,
+  activateCampaign,
+  pauseCampaign,
   type Campaign,
 } from "@/lib/campaignOrchestrator";
 import { logAuditEvent } from "@/lib/auditLogger";
@@ -23,6 +25,10 @@ export function DashboardCampaigns() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [glowingId, setGlowingId] = useState<string | null>(null);
+  const [pillPopId, setPillPopId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "pause" | "delete"; exiting: boolean } | null>(null);
   const [metrics, setMetrics] = useState({
     totalCampaigns: 0,
     activeCampaigns: 0,
@@ -84,22 +90,46 @@ export function DashboardCampaigns() {
     });
   };
 
+  const showToast = (message: string, type: "success" | "pause" | "delete") => {
+    setToast({ message, type, exiting: false });
+    setTimeout(() => {
+      setToast((prev) => (prev ? { ...prev, exiting: true } : null));
+      setTimeout(() => setToast(null), 260);
+    }, 2000);
+  };
+
   const toggleStatus = async (campaign: Campaign) => {
     const nextStatus = campaign.status === "active" ? "paused" : "active";
-    const updated = await updateCampaign(campaign.id, { status: nextStatus });
+    setTogglingId(campaign.id);
+    const updated = nextStatus === "active"
+      ? await activateCampaign(campaign)
+      : await pauseCampaign(campaign);
     if (updated) {
       setCampaigns((prev) => prev.map((c) => c.id === campaign.id ? updated : c));
       const m = await getCampaignMetrics(merchantId!);
       setMetrics(m);
+      setTogglingId(null);
+      setGlowingId(campaign.id);
+      setPillPopId(campaign.id);
+      setTimeout(() => setGlowingId(null), 750);
+      setTimeout(() => setPillPopId(null), 450);
+      showToast(
+        nextStatus === "active" ? `"${campaign.name}" activated` : `"${campaign.name}" paused`,
+        nextStatus === "active" ? "success" : "pause"
+      );
+    } else {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async (campaignId: string) => {
     const ok = await deleteCampaign(campaignId);
     if (ok) {
+      const name = campaigns.find((c) => c.id === campaignId)?.name || "Campaign";
       setCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
       const m = await getCampaignMetrics(merchantId!);
       setMetrics(m);
+      showToast(`"${name}" deleted`, "delete");
     }
   };
 
@@ -158,9 +188,13 @@ export function DashboardCampaigns() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {campaigns.slice(0, 5).map((campaign) => (
+          {campaigns.slice(0, 5).map((campaign) => {
+            const isGlowing = glowingId === campaign.id;
+            const isActive = campaign.status === "active";
+            return (
             <div
               key={campaign.id}
+              className={isGlowing ? (isActive ? "campaign-card-glow-active" : "campaign-card-glow-paused") : ""}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -169,19 +203,22 @@ export function DashboardCampaigns() {
                 borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#fafafa",
+                transition: "border-color .3s, box-shadow .3s",
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                   <span
+                    className={pillPopId === campaign.id ? "campaign-status-pill-pop" : ""}
                     style={{
                       fontSize: 10,
                       fontWeight: 600,
                       textTransform: "uppercase",
                       padding: "2px 6px",
                       borderRadius: 4,
-                      background: campaign.status === "active" ? "#dcfce7" : "#f3f4f6",
-                      color: campaign.status === "active" ? "#16a34a" : "#6b7280",
+                      background: isActive ? "#dcfce7" : "#f3f4f6",
+                      color: isActive ? "#16a34a" : "#6b7280",
+                      display: "inline-block",
                     }}
                   >
                     {campaign.status}
@@ -207,8 +244,9 @@ export function DashboardCampaigns() {
               </div>
               <div style={{ display: "flex", gap: 6, marginLeft: 12, flexShrink: 0 }}>
                 <button
-                  className="secondary-button"
+                  className={`secondary-button ${togglingId === campaign.id ? "loading" : ""}`}
                   onClick={() => toggleStatus(campaign)}
+                  disabled={togglingId === campaign.id}
                   style={{ fontSize: 11, padding: "4px 10px" }}
                 >
                   {campaign.status === "active" ? "Pause" : "Activate"}
@@ -222,12 +260,20 @@ export function DashboardCampaigns() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
           {campaigns.length > 5 && (
             <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
               +{campaigns.length - 5} more campaigns
             </p>
           )}
+        </div>
+      )}
+
+      {toast && (
+        <div className={`campaign-toast campaign-toast-${toast.type} ${toast.exiting ? "campaign-toast-exit" : ""}`}>
+          {toast.type === "success" ? "✓ " : toast.type === "pause" ? "⏸ " : "🗑 "}
+          {toast.message}
         </div>
       )}
     </section>

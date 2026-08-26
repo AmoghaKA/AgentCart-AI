@@ -10,10 +10,10 @@ const GEMINI_KEY = process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY || proce
 function aiModel() {
   if (GROQ_KEY && GROQ_KEY !== "gsk_your_groq_key_here") {
     const groq = createGroq({ apiKey: GROQ_KEY });
-    return groq("qwen/qwen3.6-27b");
+    return groq("openai/gpt-oss-120b");
   }
   const google = createGoogleGenerativeAI({ apiKey: GEMINI_KEY });
-  return google("gemini-3.6-flash");
+  return google("gemini-2.0-flash");
 }
 
 const HAS_AI = Boolean(GROQ_KEY && GROQ_KEY !== "gsk_your_groq_key_here") || Boolean(GEMINI_KEY);

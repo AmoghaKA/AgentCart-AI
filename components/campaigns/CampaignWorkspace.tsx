@@ -10,6 +10,8 @@ import {
   deleteCampaign,
   generateAICampaigns,
   getCampaignMetrics,
+  activateCampaign,
+  pauseCampaign,
   type Campaign,
 } from "@/lib/campaignOrchestrator";
 import { logAuditEvent } from "@/lib/auditLogger";
@@ -25,14 +27,21 @@ const TYPE_META: Record<string, { label: string; icon: string; color: string }> 
   bundle: { label: "Bundle", icon: "⊞", color: "campaign-type-bundle" },
 };
 
-function CampaignCard({ campaign, onToggle, onDelete }: { campaign: Campaign; onToggle: () => void; onDelete: () => void }) {
+function CampaignCard({ campaign, onToggle, onDelete, toggling, glowClass, pillPop }: {
+  campaign: Campaign;
+  onToggle: () => void;
+  onDelete: () => void;
+  toggling: boolean;
+  glowClass: string;
+  pillPop: boolean;
+}) {
   const type = TYPE_META[campaign.type] || { label: campaign.type, icon: "•", color: "" };
   const isActive = campaign.status === "active";
   const ctr = campaign.impressions > 0 ? ((campaign.clicks / campaign.impressions) * 100).toFixed(1) : "0.0";
   const cvr = campaign.clicks > 0 ? ((campaign.conversions / campaign.clicks) * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="campaign-result-card">
+    <div className={`campaign-result-card ${glowClass}`}>
       <div className="campaign-card-top">
         <div className="campaign-card-type">
           <span className={`campaign-type-icon ${type.color}`}>{type.icon}</span>
@@ -42,7 +51,7 @@ function CampaignCard({ campaign, onToggle, onDelete }: { campaign: Campaign; on
           </div>
         </div>
         <div className="campaign-card-status-row">
-          <span className={`campaign-status-pill ${isActive ? "status-active" : "status-paused"}`}>
+          <span className={`campaign-status-pill ${isActive ? "status-active" : "status-paused"} ${pillPop ? "campaign-status-pill-pop" : ""}`}>
             <span className={`status-dot ${isActive ? "dot-active" : "dot-paused"}`} />
             {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
           </span>
@@ -89,7 +98,11 @@ function CampaignCard({ campaign, onToggle, onDelete }: { campaign: Campaign; on
       </div>
 
       <div className="campaign-card-actions">
-        <button className={`campaign-action-btn ${isActive ? "action-pause" : "action-activate"}`} onClick={onToggle}>
+        <button
+          className={`campaign-action-btn ${isActive ? "action-pause" : "action-activate"} ${toggling ? "loading" : ""}`}
+          onClick={onToggle}
+          disabled={toggling}
+        >
           {isActive ? "Pause" : "Activate"}
         </button>
         <button className="campaign-action-btn action-delete" onClick={onDelete}>
@@ -105,6 +118,10 @@ export function CampaignWorkspace() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [glowingId, setGlowingId] = useState<string | null>(null);
+  const [pillPopId, setPillPopId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "pause" | "delete"; exiting: boolean } | null>(null);
   const [metrics, setMetrics] = useState({
     totalCampaigns: 0,
     activeCampaigns: 0,
@@ -166,22 +183,46 @@ export function CampaignWorkspace() {
     });
   };
 
+  const showToast = (message: string, type: "success" | "pause" | "delete") => {
+    setToast({ message, type, exiting: false });
+    setTimeout(() => {
+      setToast((prev) => (prev ? { ...prev, exiting: true } : null));
+      setTimeout(() => setToast(null), 260);
+    }, 2000);
+  };
+
   const toggleStatus = async (campaign: Campaign) => {
     const nextStatus = campaign.status === "active" ? "paused" : "active";
-    const updated = await updateCampaign(campaign.id, { status: nextStatus });
+    setTogglingId(campaign.id);
+    const updated = nextStatus === "active"
+      ? await activateCampaign(campaign)
+      : await pauseCampaign(campaign);
     if (updated) {
       setCampaigns((prev) => prev.map((c) => c.id === campaign.id ? updated : c));
       const m = await getCampaignMetrics(merchantId!);
       setMetrics(m);
+      setTogglingId(null);
+      setGlowingId(campaign.id);
+      setPillPopId(campaign.id);
+      setTimeout(() => setGlowingId(null), 750);
+      setTimeout(() => setPillPopId(null), 450);
+      showToast(
+        nextStatus === "active" ? `"${campaign.name}" activated` : `"${campaign.name}" paused`,
+        nextStatus === "active" ? "success" : "pause"
+      );
+    } else {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async (campaignId: string) => {
     const ok = await deleteCampaign(campaignId);
     if (ok) {
+      const name = campaigns.find((c) => c.id === campaignId)?.name || "Campaign";
       setCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
       const m = await getCampaignMetrics(merchantId!);
       setMetrics(m);
+      showToast(`"${name}" deleted`, "delete");
     }
   };
 
@@ -224,8 +265,18 @@ export function CampaignWorkspace() {
               campaign={campaign}
               onToggle={() => toggleStatus(campaign)}
               onDelete={() => handleDelete(campaign.id)}
+              toggling={togglingId === campaign.id}
+              glowClass={glowingId === campaign.id ? (campaign.status === "active" ? "campaign-card-glow-active" : "campaign-card-glow-paused") : ""}
+              pillPop={pillPopId === campaign.id}
             />
           ))}
+        </div>
+      )}
+
+      {toast && (
+        <div className={`campaign-toast campaign-toast-${toast.type} ${toast.exiting ? "campaign-toast-exit" : ""}`}>
+          {toast.type === "success" ? "✓ " : toast.type === "pause" ? "⏸ " : "🗑 "}
+          {toast.message}
         </div>
       )}
     </div>
