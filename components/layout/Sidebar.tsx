@@ -82,7 +82,7 @@ export function Sidebar() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push("/auth/login");
+    router.push("/");
     router.refresh();
   };
 

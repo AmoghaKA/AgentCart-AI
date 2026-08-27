@@ -35,7 +35,7 @@ export default function LandingPage() {
           </div>
 
           <div className="lp-nav-right">
-            <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--sm">
+            <Link href="/auth/login" className="lp-nav-cta">
               Sign In
             </Link>
           </div>
@@ -62,9 +62,12 @@ export default function LandingPage() {
       {/* ── Hero ── */}
       <section className="lp-hero">
         <div className="lp-container">
-          <div className="lp-badge">AI GROWTH &amp; AGENTIC COMMERCE</div>
+          <div className="lp-hero-badge">
+            <div className="lp-badge">AI Growth &amp; Agentic Commerce</div>
+          </div>
           <h1 className="lp-hero-title">
-            Turn Every Buyer Into a<br />Revenue Opportunity.
+            Turn Every Buyer Into a{" "}
+            <span className="lp-hero-title-accent">Revenue Opportunity.</span>
           </h1>
           <p className="lp-hero-sub">
             AgentCart AI helps merchants grow order value with intelligent upsells
@@ -73,57 +76,71 @@ export default function LandingPage() {
           </p>
           <div className="lp-hero-ctas">
             <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--lg">
-              Open AgentCart AI <span className="lp-arrow">→</span>
+              Open AgentCart AI <span className="lp-arrow">&rarr;</span>
             </Link>
             <button onClick={() => scrollTo("how-it-works")} className="lp-btn lp-btn--ghost lp-btn--lg">
               See How It Works
             </button>
           </div>
 
+          <div className="lp-hero-proof">
+            <span className="lp-hero-proof-item">
+              <span className="lp-hero-proof-dot" /> AI-Powered Upsells
+            </span>
+            <span className="lp-hero-proof-item">
+              <span className="lp-hero-proof-dot" /> Agentic Commerce
+            </span>
+            <span className="lp-hero-proof-item">
+              <span className="lp-hero-proof-dot" /> Built-in Safety
+            </span>
+          </div>
+
           {/* Hero Visual */}
           <div className="lp-hero-visual">
-            <div className="lp-visual-card">
-              <div className="lp-visual-step">
-                <div className="lp-visual-icon lp-visual-icon--request">✦</div>
-                <div>
-                  <strong>Customer Request</strong>
-                  <span>&quot;I need a laptop for coding&quot;</span>
+            <div className="lp-visual-wrapper">
+              <div className="lp-visual-card">
+                <div className="lp-visual-step">
+                  <div className="lp-visual-icon lp-visual-icon--request">✦</div>
+                  <div>
+                    <strong>Customer Request</strong>
+                    <span>&quot;I need a laptop for coding&quot;</span>
+                  </div>
                 </div>
-              </div>
-              <div className="lp-visual-arrow">↓</div>
-              <div className="lp-visual-step">
-                <div className="lp-visual-icon lp-visual-icon--agent">⚡</div>
-                <div>
-                  <strong>AI Growth Agent</strong>
-                  <span>Analyzes &amp; recommends products</span>
+                <div className="lp-visual-arrow" />
+                <div className="lp-visual-step">
+                  <div className="lp-visual-icon lp-visual-icon--agent">⚡</div>
+                  <div>
+                    <strong>AI Growth Agent</strong>
+                    <span>Analyzes &amp; recommends products</span>
+                  </div>
                 </div>
-              </div>
-              <div className="lp-visual-arrow">↓</div>
-              <div className="lp-visual-products">
-                <div className="lp-visual-product lp-visual-product--base">
-                  <span className="lp-vp-tag">BASE</span>
-                  <span className="lp-vp-name">Laptop</span>
-                  <span className="lp-vp-price">₹65,000</span>
+                <div className="lp-visual-arrow" />
+                <div className="lp-visual-products">
+                  <div className="lp-visual-product lp-visual-product--base">
+                    <span className="lp-vp-tag">BASE</span>
+                    <span className="lp-vp-name">Laptop</span>
+                    <span className="lp-vp-price">₹65,000</span>
+                  </div>
+                  <div className="lp-visual-plus">+</div>
+                  <div className="lp-visual-product">
+                    <span className="lp-vp-name">Wireless Mouse</span>
+                    <span className="lp-vp-price">₹1,500</span>
+                  </div>
+                  <div className="lp-visual-product">
+                    <span className="lp-vp-name">Laptop Backpack</span>
+                    <span className="lp-vp-price">₹2,500</span>
+                  </div>
                 </div>
-                <div className="lp-visual-plus">+</div>
-                <div className="lp-visual-product">
-                  <span className="lp-vp-name">Wireless Mouse</span>
-                  <span className="lp-vp-price">₹1,500</span>
-                </div>
-                <div className="lp-visual-product">
-                  <span className="lp-vp-name">Laptop Backpack</span>
-                  <span className="lp-vp-price">₹2,500</span>
-                </div>
-              </div>
-              <div className="lp-visual-arrow">↓</div>
-              <div className="lp-visual-total">
-                <div>
-                  <strong>Potential Order</strong>
-                  <span className="lp-visual-amount">₹69,000</span>
-                </div>
-                <div className="lp-visual-revenue">
-                  <span>AI REVENUE OPPORTUNITY</span>
-                  <strong>+₹4,000 potential revenue</strong>
+                <div className="lp-visual-arrow" />
+                <div className="lp-visual-total">
+                  <div>
+                    <strong>Potential Order</strong>
+                    <span className="lp-visual-amount">₹69,000</span>
+                  </div>
+                  <div className="lp-visual-revenue">
+                    <span>AI Revenue Opportunity</span>
+                    <strong>+₹4,000 potential revenue</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -135,7 +152,7 @@ export default function LandingPage() {
       <section id="product" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">REVENUE GROWTH</div>
+            <div className="lp-badge lp-badge--dark">Revenue Growth</div>
             <h2 className="lp-section-title">Your AI Sales Agent Works While You Sell.</h2>
             <p className="lp-section-sub">
               AgentCart AI analyzes your product catalog and identifies complementary
@@ -164,7 +181,7 @@ export default function LandingPage() {
           {/* Revenue Example */}
           <div className="lp-revenue-example">
             <div className="lp-rev-header">
-              <span className="lp-badge lp-badge--outline">EXAMPLE / DEMO</span>
+              <span className="lp-badge lp-badge--outline">Example / Demo</span>
             </div>
             <div className="lp-rev-body">
               <div className="lp-rev-items">
@@ -212,7 +229,7 @@ export default function LandingPage() {
       <section id="ai-buyer" className="lp-section lp-section--alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">AI BUYER</div>
+            <div className="lp-badge lp-badge--dark">AI Buyer</div>
             <h2 className="lp-section-title">Make Your Store Ready for AI Buyers.</h2>
             <p className="lp-section-sub">
               AI buyers should not need to understand your website UI. AgentCart AI
@@ -264,7 +281,7 @@ export default function LandingPage() {
 
           <div className="lp-section-cta">
             <Link href="/ai-buyer" className="lp-btn lp-btn--primary">
-              Explore AI Buyer <span className="lp-arrow">→</span>
+              Explore AI Buyer <span className="lp-arrow">&rarr;</span>
             </Link>
           </div>
         </div>
@@ -274,7 +291,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">AGENTIC COMMERCE</div>
+            <div className="lp-badge lp-badge--dark">Agentic Commerce</div>
             <h2 className="lp-section-title">From Product Discovery to Payment.</h2>
             <p className="lp-section-sub">
               A complete workflow that takes AI buyers from discovery through safe,
@@ -307,7 +324,7 @@ export default function LandingPage() {
       <section id="safety" className="lp-section lp-section--alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">SAFETY</div>
+            <div className="lp-badge lp-badge--dark">Safety</div>
             <h2 className="lp-section-title">
               AI That Can Sell Without Losing Control.
             </h2>
@@ -366,7 +383,7 @@ export default function LandingPage() {
       <section id="audit" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">AUDIT TRAIL</div>
+            <div className="lp-badge lp-badge--dark">Audit Trail</div>
             <h2 className="lp-section-title">Every Important Action Leaves a Trace.</h2>
             <p className="lp-section-sub">
               AgentCart AI records important AI, commerce, approval, safety and
@@ -395,7 +412,7 @@ export default function LandingPage() {
 
           <div className="lp-section-cta">
             <Link href="/audit" className="lp-btn lp-btn--primary">
-              View Audit Trail <span className="lp-arrow">→</span>
+              View Audit Trail <span className="lp-arrow">&rarr;</span>
             </Link>
           </div>
         </div>
@@ -405,7 +422,7 @@ export default function LandingPage() {
       <section className="lp-section lp-section--alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">RELIABILITY</div>
+            <div className="lp-badge lp-badge--dark">Reliability</div>
             <h2 className="lp-section-title">When Something Goes Wrong, The Agent Fails Safely.</h2>
             <p className="lp-section-sub">
               A failed or cancelled payment is never treated as successful. The
@@ -431,7 +448,7 @@ export default function LandingPage() {
       <section className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-badge lp-badge--dark">PRODUCT PREVIEW</div>
+            <div className="lp-badge lp-badge--dark">Product Preview</div>
             <h2 className="lp-section-title">See AgentCart AI in Action.</h2>
             <p className="lp-section-sub">
               A merchant dashboard designed for revenue intelligence, product
@@ -463,7 +480,7 @@ export default function LandingPage() {
                 <div className="lp-preview-main">
                   <div className="lp-pm-header">
                     <div>
-                      <div className="lp-pm-eyebrow">AI GROWTH OPPORTUNITY</div>
+                      <div className="lp-pm-eyebrow">AI Growth Opportunity</div>
                       <h3>CodePro Laptop</h3>
                     </div>
                     <div className="lp-pm-badge">DEMO</div>
@@ -485,7 +502,7 @@ export default function LandingPage() {
                       <strong>+₹4,000</strong>
                     </div>
                     <div className="lp-pm-action">
-                      <span className="lp-pm-btn">View Opportunity →</span>
+                      <span className="lp-pm-btn">View Opportunity &rarr;</span>
                     </div>
                   </div>
                 </div>
@@ -505,7 +522,7 @@ export default function LandingPage() {
           </p>
           <div className="lp-cta-actions">
             <Link href="/auth/login" className="lp-btn lp-btn--primary lp-btn--lg">
-              Open AgentCart AI <span className="lp-arrow">→</span>
+              Open AgentCart AI <span className="lp-arrow">&rarr;</span>
             </Link>
           </div>
           <span className="lp-cta-tagline">Built for AI Growth &amp; Agentic Commerce.</span>
@@ -528,7 +545,7 @@ export default function LandingPage() {
             <Link href="/ai-buyer">AI Buyer</Link>
             <Link href="/audit">Audit Trail</Link>
           </div>
-          <div className="lp-footer-copy">© 2026 AgentCart AI</div>
+          <div className="lp-footer-copy">&copy; 2026 AgentCart AI. All rights reserved.</div>
         </div>
       </footer>
     </div>
