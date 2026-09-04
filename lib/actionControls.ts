@@ -61,7 +61,8 @@ function buildBoundaries(
   type: MoneyActionType,
   amount: number,
   items: CheckoutItem[],
-  catalog: Product[]
+  catalog: Product[],
+  session: CheckoutSession
 ): ActionBoundary[] {
   const byId = new Map(catalog.map((p) => [p.id, p]));
   const allProductsExist = items.every((item) => byId.has(item.productId));
@@ -131,12 +132,15 @@ function buildBoundaries(
   ];
 
   if (type === "OPEN_RAZORPAY_PAYMENT") {
+    const hasOrder = Boolean(session.razorpayOrderId);
     boundaries.push({
       label: "Razorpay order validity",
       limit: "Valid order exists",
-      current: "N/A",
-      passed: false,
-      detail: "No valid Razorpay order has been created yet.",
+      current: hasOrder ? session.razorpayOrderId! : "N/A",
+      passed: hasOrder,
+      detail: hasOrder
+        ? undefined
+        : "No valid Razorpay order has been created yet.",
     });
   }
 
@@ -287,7 +291,7 @@ export function evaluateActionControl(
   const items = session.items;
   const amount = computeTotal(items, catalog);
   const explanation = buildExplanation(type, amount, session);
-  const boundaries = buildBoundaries(type, amount, items, catalog);
+  const boundaries = buildBoundaries(type, amount, items, catalog, session);
   const gate = buildGate(type, session);
   const blockedReasons = evaluateBlockedReasons(
     type,
